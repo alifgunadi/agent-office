@@ -5,7 +5,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"C:/Users/developer/agent-office/hook.js\"",
+            "command": "node \"C:/projects/agent-office/ensure-server.js\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"C:/projects/agent-office/hook.js\"",
             "timeout": 5
           }
         ]
@@ -16,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"C:/Users/developer/agent-office/hook.js\"",
+            "command": "node \"C:/projects/agent-office/hook.js\"",
             "timeout": 5
           }
         ]
@@ -27,7 +32,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"C:/Users/developer/agent-office/hook.js\"",
+            "command": "node \"C:/projects/agent-office/hook.js\"",
             "timeout": 5
           }
         ]
@@ -38,7 +43,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"C:/Users/developer/agent-office/hook.js\"",
+            "command": "node \"C:/projects/agent-office/hook.js\"",
             "timeout": 5
           }
         ]
@@ -49,7 +54,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"C:/Users/developer/agent-office/hook.js\"",
+            "command": "node \"C:/projects/agent-office/hook.js\"",
             "timeout": 5
           }
         ]
@@ -60,7 +65,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"C:/Users/developer/agent-office/hook.js\"",
+            "command": "node \"C:/projects/agent-office/hook.js\"",
             "timeout": 5
           }
         ]
@@ -71,7 +76,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"C:/Users/developer/agent-office/hook.js\"",
+            "command": "node \"C:/projects/agent-office/hook.js\"",
             "timeout": 5
           }
         ]
@@ -82,7 +87,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"C:/Users/developer/agent-office/hook.js\"",
+            "command": "node \"C:/projects/agent-office/hook.js\"",
             "timeout": 5
           }
         ]
@@ -93,7 +98,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"C:/Users/developer/agent-office/hook.js\"",
+            "command": "node \"C:/projects/agent-office/hook.js\"",
             "timeout": 5
           }
         ]
@@ -104,7 +109,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"C:/Users/developer/agent-office/hook.js\"",
+            "command": "node \"C:/projects/agent-office/hook.js\"",
             "timeout": 5
           }
         ]
