@@ -17,6 +17,13 @@ const LOG_PATH = path.join(os.tmpdir(), 'agent-office.log');
 
 setTimeout(() => process.exit(0), HARD_EXIT_MS).unref();
 
+// An explicit start clears a previous manual Stop from the UI.
+try {
+  fs.unlinkSync(path.join(os.tmpdir(), 'agent-office.stopped'));
+} catch {
+  // Marker absent.
+}
+
 // Hook payload arrives on stdin; it is not needed here.
 process.stdin.on('error', () => {});
 process.stdin.resume();

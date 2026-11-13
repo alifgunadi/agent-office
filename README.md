@@ -9,7 +9,7 @@ characters type, wait, or sleep based on Claude Code hook events.
 - `index.html` - the office page.
 - `ensure-server.js` - starts the server in the background if it is not running (silent, idempotent).
 - `hooks-settings-snippet.json` - hooks config to merge into `~/.claude/settings.json`.
-- `start-office.ps1` / `stop-office.ps1` - manual start (foreground) / stop.
+- `start-office.ps1` / `stop-office.ps1` - start in the background and open the browser / stop.
 - `install-autostart.ps1` / `uninstall-autostart.ps1` - optional Windows logon task.
 
 ## Privacy
@@ -48,3 +48,10 @@ are treated as ended (covers crashed sessions). If the server is down when you s
 `hook.js` starts it again. Disable auto stop with environment variable `AGENT_OFFICE_AUTO_STOP=0`.
 
 Server output is written to `%TEMP%\agent-office.log`.
+
+## Restart / Stop from the page
+- **Restart**: the server starts a fresh instance (new code) and the page reloads automatically.
+- **Stop**: the server stops and stays stopped (prompts in an open session will not revive it)
+  until a new Claude Code session starts or you run `start-office.ps1`.
+  A marker file `%TEMP%\agent-office.stopped` records the manual stop.
+- Start cannot be a button: the page itself is served by the server.

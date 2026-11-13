@@ -13,6 +13,12 @@
   header h1 { font-size: 15px; margin: 0; letter-spacing: 1px; }
   #conn { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: #7f1d1d; }
   #conn.on { background: #14532d; }
+  .controls { margin-left: auto; display: flex; gap: 8px; }
+  .controls button { font: inherit; font-size: 12px; color: #e5e7eb; background: #1f2937; border: 1px solid #374151; border-radius: 6px; padding: 4px 12px; cursor: pointer; }
+  .controls button:hover:not(:disabled) { background: #374151; }
+  .controls button:disabled { opacity: 0.4; cursor: default; }
+  .controls #btn-stop { border-color: #7f1d1d; }
+  #notice { display: none; padding: 8px 16px; background: #1f2937; color: #fbbf24; border-bottom: 1px solid #374151; }
   .stage { flex: 1; overflow: auto; display: flex; align-items: flex-start; justify-content: center; padding: 12px; }
   canvas { image-rendering: pixelated; max-width: 100%; height: auto; }
   aside { width: 300px; border-left: 1px solid #1f2937; display: flex; flex-direction: column; }
@@ -29,7 +35,12 @@
   <header>
     <h1>AGENT OFFICE</h1>
     <span id="conn">disconnected</span>
+    <div class="controls">
+      <button id="btn-restart" type="button" title="Restart the server and reload this page">Restart</button>
+      <button id="btn-stop" type="button" title="Stop the server until a new Claude Code session or start-office.ps1">Stop</button>
+    </div>
   </header>
+  <div id="notice"></div>
   <div class="stage"><canvas id="office"></canvas></div>
 </main>
 <aside>
@@ -60,7 +71,10 @@ const ctx = canvas.getContext('2d');
 let desks = [];
 
 function roleOf(id) {
-  return ROLES[id] || { ...GUEST, label: id.length > 18 ? id.slice(0, 17) + '.' : id };
+  if (ROLES[id]) return ROLES[id];
+  // Plugin agents are named "plugin:agent"; show the agent part.
+  const name = id.includes(':') ? id.slice(id.lastIndexOf(':') + 1) : id;
+  return { ...GUEST, label: name.length > 18 ? name.slice(0, 17) + '.' : name };
 }
 
 function px(x, y, w, h, c) {
@@ -206,9 +220,81 @@ function renderLog(entries) {
 }
 
 const connEl = document.getElementById('conn');
+const noticeEl = document.getElementById('notice');
+const restartBtn = document.getElementById('btn-restart');
+const stopBtn = document.getElementById('btn-stop');
+let restarting = false;
+
+function setStatus(text, live) {
+  connEl.textContent = text;
+  connEl.className = live ? 'on' : '';
+}
+
+function setButtons(enabled) {
+  restartBtn.disabled = !enabled;
+  stopBtn.disabled = !enabled;
+}
+
+function showNotice(text) {
+  noticeEl.textContent = text;
+  noticeEl.style.display = text ? 'block' : 'none';
+}
+
+async function sendControl(action) {
+  setButtons(false);
+  try {
+    const res = await fetch('/control/' + action, { method: 'POST', headers: { 'X-Agent-Office': '1' } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+  } catch (err) {
+    console.error('Control request failed', err);
+    showNotice('Failed to ' + action + ' the server.');
+    setButtons(true);
+    return false;
+  }
+  return true;
+}
+
+const RESTART_POLL_MS = 500;
+const RESTART_TIMEOUT_MS = 15000;
+
+restartBtn.addEventListener('click', async () => {
+  if (!(await sendControl('restart'))) return;
+  restarting = true;
+  source.close();
+  setStatus('restarting...', false);
+  // Poll until the new server answers, then reload to pick up any new index.html.
+  const deadline = Date.now() + RESTART_TIMEOUT_MS;
+  await new Promise((r) => setTimeout(r, RESTART_POLL_MS));
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch('/state', { cache: 'no-store' });
+      if (res.ok) return location.reload();
+    } catch {
+      // Server not up yet.
+    }
+    await new Promise((r) => setTimeout(r, RESTART_POLL_MS));
+  }
+  setStatus('offline', false);
+  showNotice('Restart did not come back. Run start-office.ps1 or open a new Claude Code session, then reload this page.');
+});
+
+stopBtn.addEventListener('click', async () => {
+  if (!(await sendControl('stop'))) return;
+  source.close();
+  setStatus('stopped', false);
+  showNotice('Server stopped. It starts again when you open a new Claude Code session or run start-office.ps1. Then reload this page.');
+});
+
 const source = new EventSource('/events');
-source.onopen = () => { connEl.textContent = 'live'; connEl.className = 'on'; };
-source.onerror = () => { connEl.textContent = 'reconnecting...'; connEl.className = ''; };
+source.onopen = () => {
+  setStatus('live', true);
+  setButtons(true);
+  showNotice('');
+};
+source.onerror = () => {
+  if (!restarting) setStatus('reconnecting...', false);
+  setButtons(false);
+};
 source.onmessage = (msg) => {
   try {
     const state = JSON.parse(msg.data);

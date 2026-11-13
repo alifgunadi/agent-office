@@ -87,7 +87,11 @@ function forward() {
 function reviveServer() {
   try {
     const { spawn } = require('node:child_process');
+    const fs = require('node:fs');
+    const os = require('node:os');
     const path = require('node:path');
+    // Respect a manual Stop from the UI; a new session (SessionStart) clears it.
+    if (fs.existsSync(path.join(os.tmpdir(), 'agent-office.stopped'))) return;
     spawn(process.execPath, [path.join(__dirname, 'ensure-server.js')], {
       detached: true,
       windowsHide: true,

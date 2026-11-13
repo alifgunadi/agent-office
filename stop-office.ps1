@@ -1,5 +1,15 @@
-# Stops the Agent Office server listening on port 4317 (or AGENT_OFFICE_PORT).
+# Stops Agent Office. It stays stopped until a new Claude Code session or start-office.ps1.
 $port = if ($env:AGENT_OFFICE_PORT) { [int]$env:AGENT_OFFICE_PORT } else { 4317 }
+
+# Preferred: ask the server to stop itself (also sets the "stopped" marker).
+try {
+  Invoke-WebRequest -Method Post -Uri "http://127.0.0.1:$port/control/stop" -Headers @{ "X-Agent-Office" = "1" } -TimeoutSec 3 -UseBasicParsing | Out-Null
+  Write-Host "Agent Office stopped." -ForegroundColor Green
+  exit 0
+} catch {
+  # Fall through: server not reachable or an older version without /control/stop.
+}
+
 $conn = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $conn) {
   Write-Host "Agent Office is not running on port $port." -ForegroundColor Yellow
@@ -7,7 +17,8 @@ if (-not $conn) {
 }
 $proc = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
 if ($proc -and $proc.ProcessName -match '^(node|bun)$') {
-  Stop-Process -Id $proc.Id
+  Stop-Process -Id $proc.Id -Force
+  New-Item -ItemType File -Force (Join-Path $env:TEMP "agent-office.stopped") | Out-Null
   Write-Host "Agent Office stopped (PID $($proc.Id))." -ForegroundColor Green
 } else {
   Write-Host "Port $port is used by '$($proc.ProcessName)', not Agent Office. Nothing stopped." -ForegroundColor Red

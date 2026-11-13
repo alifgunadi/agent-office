@@ -4,7 +4,16 @@
 
 const http = require('node:http');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+const { spawn } = require('node:child_process');
+
+// Written on a manual Stop; hook.js will not auto-revive the server while it exists.
+// ensure-server.js removes it (new Claude Code session, start-office.ps1, logon task).
+const STOPPED_MARKER = path.join(os.tmpdir(), 'agent-office.stopped');
+const LOG_PATH = path.join(os.tmpdir(), 'agent-office.log');
+const LISTEN_RETRIES = 10;
+const LISTEN_RETRY_MS = 200;
 
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.AGENT_OFFICE_PORT) || 4317;
@@ -18,6 +27,8 @@ const AUTO_STOP = process.env.AGENT_OFFICE_AUTO_STOP !== '0';
 const SHUTDOWN_GRACE_MS = 30 * 1000;
 const STALE_SESSION_MS = 6 * 60 * 60 * 1000;
 const STALE_CHECK_MS = 5 * 60 * 1000;
+const STALE_DESK_MS = 10 * 60 * 1000;
+const STALE_DESK_CHECK_MS = 60 * 1000;
 
 // Desk ids must match the `name` field in ~/.claude/agents/*.md frontmatter.
 const ROLE_IDS = [
@@ -50,12 +61,47 @@ function cancelShutdown() {
 function scheduleShutdown(reason) {
   if (!AUTO_STOP || shutdownTimer) return;
   console.log(`[${new Date().toISOString()}] No active sessions (${reason}). Stopping in ${SHUTDOWN_GRACE_MS / 1000}s.`);
-  shutdownTimer = setTimeout(() => {
-    console.log(`[${new Date().toISOString()}] Agent Office stopped.`);
-    for (const res of clients) res.end();
-    server.close();
-    process.exit(0);
-  }, SHUTDOWN_GRACE_MS);
+  shutdownTimer = setTimeout(() => shutdown('auto stop'), SHUTDOWN_GRACE_MS);
+}
+
+function shutdown(reason) {
+  console.log(`[${new Date().toISOString()}] Agent Office stopped (${reason}).`);
+  server.close();
+  for (const res of clients) res.end();
+  setTimeout(() => process.exit(0), 100);
+}
+
+function manualStop() {
+  try {
+    fs.writeFileSync(STOPPED_MARKER, new Date().toISOString());
+  } catch (err) {
+    console.error('Could not write stop marker:', err.message);
+  }
+  shutdown('stopped from UI');
+}
+
+function restart() {
+  console.log(`[${new Date().toISOString()}] Restart requested.`);
+  // Release the port first; the new process retries listen until it is free.
+  server.close();
+  let out = 'ignore';
+  try {
+    out = fs.openSync(LOG_PATH, 'a');
+  } catch {
+    // Logging is optional.
+  }
+  try {
+    spawn(process.execPath, [__filename], {
+      cwd: __dirname,
+      detached: true,
+      windowsHide: true,
+      stdio: ['ignore', out, out],
+    }).unref();
+  } catch (err) {
+    console.error('Restart failed:', err.message);
+  }
+  for (const res of clients) res.end();
+  setTimeout(() => process.exit(0), 100);
 }
 
 function trackSession(evt) {
@@ -100,7 +146,9 @@ function setDesk(id, status, activity) {
       id,
       setTimeout(() => {
         idleTimers.delete(id);
-        if (state.desks[id] && state.desks[id].status === 'done') setDesk(id, 'idle', '');
+        if (!state.desks[id] || state.desks[id].status !== 'done') return;
+        if (state.desks[id].guest) removeDesk(id);
+        else setDesk(id, 'idle', '');
       }, DONE_TO_IDLE_MS),
     );
   }
@@ -112,6 +160,24 @@ function setDesk(id, status, activity) {
   broadcast();
 }
 
+function removeDesk(id) {
+  clearTimeout(idleTimers.get(id));
+  idleTimers.delete(id);
+  delete state.desks[id];
+  broadcast();
+}
+
+// Safety net for missed events: a desk stuck in working/waiting returns to idle,
+// and guest desks disappear once they have been quiet for a while.
+setInterval(() => {
+  const now = Date.now();
+  for (const desk of Object.values(state.desks)) {
+    if (now - desk.updatedAt < STALE_DESK_MS) continue;
+    if (desk.guest) removeDesk(desk.id);
+    else if (desk.status === 'working' || desk.status === 'waiting') setDesk(desk.id, 'idle', '');
+  }
+}, STALE_DESK_CHECK_MS).unref();
+
 function shortToolName(name) {
   if (!name) return 'tool';
   if (name.startsWith('mcp__')) {
@@ -121,7 +187,11 @@ function shortToolName(name) {
   return name;
 }
 
+// Internal Claude Code tools that are not meaningful as "work" on a desk.
+const INTERNAL_TOOL_LABELS = { SubagentHandback: 'reporting back' };
+
 function describeTool(name, input) {
+  if (INTERNAL_TOOL_LABELS[name]) return INTERNAL_TOOL_LABELS[name];
   const tool = shortToolName(name);
   if (!input) return tool;
   if (input.subagent_type) return `delegate -> ${input.subagent_type}`;
@@ -131,9 +201,20 @@ function describeTool(name, input) {
   return tool;
 }
 
+function isActiveSubagentType(type) {
+  for (const t of activeSubagents.values()) if (t === type) return true;
+  return false;
+}
+
 function resolveDesk(evt) {
-  if (typeof evt.agent_type === 'string' && evt.agent_type) return evt.agent_type;
-  if (evt.agent_id && activeSubagents.has(evt.agent_id)) return activeSubagents.get(evt.agent_id);
+  const type = typeof evt.agent_type === 'string' ? evt.agent_type : '';
+  if (evt.agent_id) {
+    if (activeSubagents.has(evt.agent_id)) return activeSubagents.get(evt.agent_id);
+    if (type) return type;
+  }
+  // agent_type without agent_id is the main thread running as an agent (e.g. a plugin's default agent),
+  // unless that type is currently running as a subagent.
+  if (type && isActiveSubagentType(type)) return type;
   if (typeof evt.teammate_name === 'string' && evt.teammate_name) return evt.teammate_name;
   return MAIN_DESK;
 }
@@ -254,10 +335,25 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (req.method === 'POST' && (req.url === '/control/stop' || req.url === '/control/restart')) {
+    // Same header guard as /event: blocks cross-site requests from other pages in the browser.
+    if (req.headers['x-agent-office'] !== '1') return res.writeHead(403).end();
+    const action = req.url === '/control/stop' ? manualStop : restart;
+    res.writeHead(202).end();
+    res.on('finish', () => setImmediate(action));
+    return;
+  }
+
   res.writeHead(404).end();
 });
 
+let listenAttempts = 0;
 server.on('error', (err) => {
+  // During a restart the previous process may still hold the port for a moment.
+  if (err.code === 'EADDRINUSE' && ++listenAttempts < LISTEN_RETRIES) {
+    setTimeout(() => server.listen(PORT, HOST), LISTEN_RETRY_MS);
+    return;
+  }
   if (err.code === 'EADDRINUSE') console.error(`Port ${PORT} is already in use. Set AGENT_OFFICE_PORT to another port.`);
   else console.error(err);
   process.exit(1);
