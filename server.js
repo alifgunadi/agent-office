@@ -13,6 +13,11 @@ const MAX_LOG_ENTRIES = 100;
 const DONE_TO_IDLE_MS = 8000;
 const KEEPALIVE_MS = 15000;
 const MAIN_DESK = 'main';
+// Auto stop: shut down after the last Claude Code session ends. Set AGENT_OFFICE_AUTO_STOP=0 to disable.
+const AUTO_STOP = process.env.AGENT_OFFICE_AUTO_STOP !== '0';
+const SHUTDOWN_GRACE_MS = 30 * 1000;
+const STALE_SESSION_MS = 6 * 60 * 60 * 1000;
+const STALE_CHECK_MS = 5 * 60 * 1000;
 
 // Desk ids must match the `name` field in ~/.claude/agents/*.md frontmatter.
 const ROLE_IDS = [
@@ -32,8 +37,48 @@ const state = { desks: {}, log: [] };
 const activeSubagents = new Map(); // agent_id -> agent_type
 const idleTimers = new Map(); // deskId -> timeout
 const clients = new Set();
+const sessions = new Map(); // session_id -> lastSeen timestamp
+let shutdownTimer = null;
 
 for (const id of ROLE_IDS) ensureDesk(id);
+
+function cancelShutdown() {
+  clearTimeout(shutdownTimer);
+  shutdownTimer = null;
+}
+
+function scheduleShutdown(reason) {
+  if (!AUTO_STOP || shutdownTimer) return;
+  console.log(`[${new Date().toISOString()}] No active sessions (${reason}). Stopping in ${SHUTDOWN_GRACE_MS / 1000}s.`);
+  shutdownTimer = setTimeout(() => {
+    console.log(`[${new Date().toISOString()}] Agent Office stopped.`);
+    for (const res of clients) res.end();
+    server.close();
+    process.exit(0);
+  }, SHUTDOWN_GRACE_MS);
+}
+
+function trackSession(evt) {
+  if (evt.hook_event_name === 'SessionEnd') {
+    if (evt.session_id) sessions.delete(evt.session_id);
+    if (sessions.size === 0) scheduleShutdown('last session ended');
+    return;
+  }
+  cancelShutdown();
+  if (evt.session_id) sessions.set(evt.session_id, Date.now());
+}
+
+setInterval(() => {
+  const now = Date.now();
+  let pruned = false;
+  for (const [id, lastSeen] of sessions) {
+    if (now - lastSeen > STALE_SESSION_MS) {
+      sessions.delete(id);
+      pruned = true;
+    }
+  }
+  if (pruned && sessions.size === 0) scheduleShutdown('stale sessions');
+}, STALE_CHECK_MS).unref();
 
 function ensureDesk(id) {
   if (!state.desks[id]) {
@@ -202,6 +247,7 @@ const server = http.createServer((req, res) => {
         return res.writeHead(400).end();
       }
       if (!evt || typeof evt !== 'object' || typeof evt.hook_event_name !== 'string') return res.writeHead(400).end();
+      trackSession(evt);
       handleEvent(evt);
       res.writeHead(204).end();
     });

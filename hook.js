@@ -76,6 +76,24 @@ function forward() {
     req.destroy();
     process.exit(0);
   });
-  req.on('error', () => process.exit(0));
+  req.on('error', () => {
+    // Server is down (e.g. auto-stopped). Revive it when the user is active again.
+    if (event.hook_event_name === 'UserPromptSubmit') reviveServer();
+    process.exit(0);
+  });
   req.end(body);
+}
+
+function reviveServer() {
+  try {
+    const { spawn } = require('node:child_process');
+    const path = require('node:path');
+    spawn(process.execPath, [path.join(__dirname, 'ensure-server.js')], {
+      detached: true,
+      windowsHide: true,
+      stdio: 'ignore',
+    }).unref();
+  } catch {
+    // Never fail Claude Code.
+  }
 }

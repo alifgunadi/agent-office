@@ -41,4 +41,10 @@ Set `AGENT_OFFICE_PORT` in both the server environment and the `env` section of 
    the server hidden in the background if it is not already running. Nothing else to install.
 2. On Windows logon (optional): run `install-autostart.ps1` once. Remove with `uninstall-autostart.ps1`.
 
+## Auto stop
+The server stops 30 seconds after the last Claude Code session ends (`SessionEnd`).
+Any new session or event within that window cancels the stop. Sessions with no events for 6 hours
+are treated as ended (covers crashed sessions). If the server is down when you submit a prompt,
+`hook.js` starts it again. Disable auto stop with environment variable `AGENT_OFFICE_AUTO_STOP=0`.
+
 Server output is written to `%TEMP%\agent-office.log`.
