@@ -4,44 +4,73 @@
 <meta charset="utf-8">
 <title>Agent Office</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  :root { color-scheme: dark; }
+  :root {
+    color-scheme: light;
+    --ink: #1f2a37; --muted: #4b5563; --paper: #ffffff; --line: #e3e8f0;
+    --bg1: #dff3ea; --bg2: #cfe6f7;
+    --red: #d23c3c; --blue: #2f6fe0; --green: #1f9d55; --gold: #f5b82e;
+    --radius: 18px; --shadow: 0 10px 30px rgba(31, 42, 55, .14), 0 2px 6px rgba(31, 42, 55, .08);
+    --font: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; background: #0b1020; color: #e5e7eb; font: 13px/1.4 ui-monospace, Consolas, monospace; display: flex; height: 100vh; }
+  body {
+    margin: 0; height: 100vh; height: 100dvh; display: flex; gap: 16px; padding: 16px;
+    color: var(--ink); font: 500 14px/1.55 var(--font);
+    background: linear-gradient(135deg, var(--bg1), var(--bg2)); background-attachment: fixed;
+  }
+  main, aside {
+    background: var(--paper); border-radius: var(--radius);
+    box-shadow: var(--shadow); min-height: 0; overflow: hidden;
+  }
   main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-  header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid #1f2937; }
-  header h1 { font-size: 15px; margin: 0; letter-spacing: 1px; }
-  #conn { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: #7f1d1d; }
-  #conn.on { background: #14532d; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 18px; flex-wrap: wrap; background: linear-gradient(135deg, #2f6fe0, #2457c5); color: #fff; }
+  header h1 { font-size: 18px; font-weight: 800; letter-spacing: .06em; margin: 0; text-shadow: 0 1px 2px rgba(0, 0, 0, .25); }
+  #conn { font-size: 13px; font-weight: 700; padding: 3px 12px 3px 26px; border-radius: 999px; background: #fff; color: var(--ink); position: relative; box-shadow: 0 1px 3px rgba(0, 0, 0, .15); }
+  #conn::before { content: ""; position: absolute; left: 10px; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; background: var(--red); transition: background .3s, box-shadow .3s; }
+  #conn.on::before { background: var(--green); box-shadow: 0 0 0 4px rgba(31, 157, 85, .22); }
   .controls { margin-left: auto; display: flex; gap: 8px; }
-  .controls button { font: inherit; font-size: 12px; color: #e5e7eb; background: #1f2937; border: 1px solid #374151; border-radius: 6px; padding: 4px 12px; cursor: pointer; }
-  .controls button:hover:not(:disabled) { background: #374151; }
-  .controls button:disabled { opacity: 0.4; cursor: default; }
-  .controls #btn-stop { border-color: #7f1d1d; }
-  #notice { display: none; padding: 8px 16px; background: #1f2937; color: #fbbf24; border-bottom: 1px solid #374151; }
-  .stage { flex: 1; overflow: auto; display: flex; align-items: flex-start; justify-content: center; padding: 12px; }
-  canvas { image-rendering: pixelated; max-width: 100%; height: auto; }
-  aside { width: 300px; border-left: 1px solid #1f2937; display: flex; flex-direction: column; }
-  aside h2 { font-size: 13px; margin: 0; padding: 10px 12px; border-bottom: 1px solid #1f2937; }
-  #log { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
-  #log li { padding: 6px 12px; border-bottom: 1px solid #111827; }
-  #log .time { color: #6b7280; margin-right: 6px; }
-  #log .who { font-weight: bold; margin-right: 6px; }
-  @media (max-width: 900px) { aside { display: none; } }
+  .controls button { font: inherit; font-size: 13px; font-weight: 700; color: var(--ink); background: #fff; border: 0; border-radius: 999px; padding: 7px 16px; cursor: pointer; box-shadow: 0 2px 6px rgba(0, 0, 0, .18); transition: transform .15s, box-shadow .15s, background .15s; }
+  .controls button:hover:not(:disabled) { background: #fff7d6; transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0, 0, 0, .22); }
+  .controls button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+  .controls button:active:not(:disabled) { transform: translateY(0); box-shadow: 0 1px 3px rgba(0, 0, 0, .2); }
+  .controls button:disabled { color: #596170; background: #e5e9f0; cursor: default; box-shadow: none; }
+  .controls #btn-stop { color: #a42727; }
+  .controls #btn-stop:disabled { color: #596170; }
+  #notice { display: none; margin: 12px 16px 0; padding: 10px 14px; background: #fdecec; color: #7a1d1d; border-left: 4px solid var(--red); border-radius: 10px; line-height: 1.5; }
+  .stage { flex: 1; overflow: auto; scrollbar-gutter: stable; display: flex; align-items: flex-start; padding: 16px; background: linear-gradient(180deg, #e9f7ee, #d6eedd); }
+  .stage:focus-visible { outline: 3px solid var(--blue); outline-offset: -3px; }
+  canvas { display: block; flex: none; margin: 0 auto; border-radius: 16px; background: #efe9da; box-shadow: 0 6px 20px rgba(31, 42, 55, .16); }
+  aside { width: 300px; display: flex; flex-direction: column; }
+  aside h2 { font-size: 16px; font-weight: 800; margin: 0; padding: 12px 16px; background: linear-gradient(135deg, #d23c3c, #b92f4a); color: #fff; letter-spacing: .03em; }
+  #log { list-style: none; margin: 0; padding: 4px 0; overflow-y: auto; overflow-x: hidden; flex: 1; }
+  #log li { padding: 9px 16px; border-bottom: 1px solid var(--line); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+  #log li:first-child { background: #f1f6ff; }
+  #log .time { color: var(--muted); display: block; font-size: 12px; }
+  #log .who { margin-right: 6px; padding: 1px 8px; border-left: 4px solid var(--ink); border-radius: 6px; background: #f3f5f9; color: var(--ink); font-weight: 700; }
+  @media (max-width: 900px) {
+    body { flex-direction: column; height: auto; min-height: 100vh; min-height: 100dvh; padding: 8px; }
+    main { flex: 1 0 auto; }
+    aside { width: auto; max-height: 40vh; flex: 0 0 auto; }
+  }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
 <main>
   <header>
     <h1>AGENT OFFICE</h1>
-    <span id="conn">disconnected</span>
+    <span id="conn" aria-live="polite">disconnected</span>
     <div class="controls">
       <button id="btn-restart" type="button" title="Restart the server and reload this page">Restart</button>
       <button id="btn-stop" type="button" title="Stop the server until a new Claude Code session or start-office.ps1">Stop</button>
     </div>
   </header>
-  <div id="notice"></div>
-  <div class="stage"><canvas id="office"></canvas></div>
+  <div id="notice" role="status"></div>
+  <div class="stage" tabindex="0"><canvas id="office" role="img" aria-label="Office floorplan with agent desks and their status"></canvas></div>
 </main>
 <aside>
   <h2>Activity</h2>
@@ -51,7 +80,7 @@
 'use strict';
 
 const ROLES = {
-  'main':                   { label: 'Main Session',     color: '#e5e7eb', hair: '#3f2a1d', skin: '#f1c27d' },
+  'main':                   { label: 'Trainer',     color: '#e5e7eb', hair: '#3f2a1d', skin: '#f1c27d' },
   'product-manager':        { label: 'Product Manager',  color: '#f59e0b', hair: '#111827', skin: '#e0ac69' },
   'lead-business-analyst':  { label: 'Business Analyst', color: '#14b8a6', hair: '#7c2d12', skin: '#ffdbac' },
   'lead-solution-engineer': { label: 'Solution Eng',     color: '#6366f1', hair: '#1f2937', skin: '#c68642' },
@@ -63,140 +92,482 @@ const ROLES = {
   'lead-devops':            { label: 'Lead DevOps',      color: '#0ea5e9', hair: '#292524', skin: '#f1c27d' },
 };
 const GUEST = { color: '#9ca3af', hair: '#4b5563', skin: '#d6b38a' };
-const STATUS_COLOR = { working: '#60a5fa', waiting: '#fbbf24', done: '#4ade80', idle: '#374151' };
+const STATUS_COLOR = { working: '#2f6fe0', waiting: '#f5b82e', done: '#1f9d55', idle: '#8b93a1' };
 
-const COLS = 5, CW = 220, CH = 200;
+// Zones by role id. Any id not listed here goes to the guest area.
+const ZONE_IDS = {
+  trainer: ['main'],
+  product: ['product-manager', 'lead-business-analyst', 'lead-solution-engineer'],
+  eng: ['lead-software-engineer', 'lead-ui', 'lead-dba', 'lead-devops'],
+  qa: ['lead-qa', 'lead-security'],
+};
+const ZONE_OF = Object.create(null);
+for (const [zone, ids] of Object.entries(ZONE_IDS)) for (const id of ids) ZONE_OF[id] = zone;
+
+const ZONES = {
+  trainer: { label: 'Trainer Office',     floor: '#ebe5f8', wall: '#9b8bd0', glass: true, door: { side: 'bottom', at: 0.5, len: 70 } },
+  product: { label: 'Product',            floor: '#fdf0d2', wall: '#d9a441', door: { side: 'bottom', at: 0.85, len: 70 } },
+  eng:     { label: 'Engineering',        floor: '#dcebfa', wall: '#6b9bd6', door: { side: 'top', at: 0.5, len: 80 } },
+  qa:      { label: 'Quality & Security', floor: '#e0f3e5', wall: '#6cb58a', glass: true, door: { side: 'top', at: 0.5, len: 70 } },
+  lounge:  { label: 'Lounge & Pantry',    floor: '#fbe6dc', wall: '#e0a58b', door: { side: 'left', at: 0.6, len: 70 } },
+  guest:   { label: 'Guests',             floor: '#eceef2', wall: '#a3acba', door: { side: 'top', at: 0.5, len: 80 } },
+};
+
+const CW = 200, CH = 190, HDR = 36, TK = 1.1; // desk tile size, zone header strip, trainer desk scale
+const CORRIDOR = '#efe9da';
 const canvas = document.getElementById('office');
+const stage = document.querySelector('.stage');
 const ctx = canvas.getContext('2d');
 let desks = [];
+let layout = null, layoutDirty = true, availW = null, shadowK = 1, dpr = 1;
+
+const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
 function roleOf(id) {
-  if (ROLES[id]) return ROLES[id];
+  id = String(id ?? '');
+  if (hasOwn(ROLES, id)) return ROLES[id];
   // Plugin agents are named "plugin:agent"; show the agent part.
   const name = id.includes(':') ? id.slice(id.lastIndexOf(':') + 1) : id;
-  return { ...GUEST, label: name.length > 18 ? name.slice(0, 17) + '.' : name };
+  const chars = Array.from(name);
+  return { ...GUEST, label: chars.length > 18 ? chars.slice(0, 17).join('') + '.' : name };
 }
 
-function px(x, y, w, h, c) {
-  ctx.fillStyle = c;
-  ctx.fillRect(Math.round(x), Math.round(y), w, h);
+// Reduced motion: freeze the canvas animation (t = 0).
+const motionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+let reduced = !!(motionQuery && motionQuery.matches);
+if (motionQuery) {
+  const onMotion = (e) => { reduced = e.matches; };
+  if (motionQuery.addEventListener) motionQuery.addEventListener('change', onMotion);
+  else if (motionQuery.addListener) motionQuery.addListener(onMotion);
 }
 
-function bubble(text, cx, y, bg, fg) {
-  ctx.font = '12px ui-monospace, Consolas, monospace';
-  const t = text.length > 26 ? text.slice(0, 25) + '.' : text;
-  const w = Math.ceil(ctx.measureText(t).width) + 14;
-  const x = Math.round(cx - w / 2);
-  px(x, y, w, 20, bg);
-  px(cx - 4, y + 20, 8, 4, bg);
-  px(cx - 2, y + 24, 4, 2, bg);
-  ctx.fillStyle = fg;
-  ctx.textAlign = 'center';
+const FONT = "'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+const MAX_BUBBLE_CHARS = 32;
+const BUBBLE_MAX = CW - 44; // bubble stays narrower than its tile
+
+function rr(x, y, w, h, r, fill) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+}
+
+function circle(x, y, r, fill) {
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = fill;
+  ctx.fill();
+}
+
+// Canvas shadows ignore the transform, so scale them by the effective pixel ratio.
+function soft(blur, dy, alpha) {
+  ctx.shadowColor = 'rgba(31,42,55,' + alpha + ')';
+  ctx.shadowBlur = blur * shadowK;
+  ctx.shadowOffsetY = dy * shadowK;
+}
+function noShadow() {
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+}
+
+function fitText(text, maxChars, maxW) {
+  let a = Array.from(String(text ?? ''));
+  if (a.length > maxChars) a = a.slice(0, maxChars - 1).concat('…');
+  while (a.length > 2 && ctx.measureText(a.join('')).width > maxW) a.splice(a.length - 2, 2, '…');
+  return a.join('');
+}
+
+// prefix (e.g. "!" or a check mark) is drawn in its own colour/alpha so only it can blink.
+function bubble(text, cx, y, accent, prefix, prefixAlpha, prefixColor) {
+  ctx.font = '700 13px ' + FONT;
+  const pre = prefix ? prefix + ' ' : '';
+  const preW = pre ? ctx.measureText(pre).width : 0;
+  const t = fitText(text, MAX_BUBBLE_CHARS, BUBBLE_MAX - 24 - preW);
+  const w = Math.ceil(preW + ctx.measureText(t).width) + 24, h = 28;
+  const x = cx - w / 2;
+  soft(10, 3, 0.22);
+  rr(x, y, w, h, 14, '#ffffff');
+  ctx.beginPath();
+  ctx.moveTo(cx - 6, y + h - 1);
+  ctx.lineTo(cx, y + h + 7);
+  ctx.lineTo(cx + 6, y + h - 1);
+  ctx.closePath();
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  noShadow();
+  rr(x, y, w, h, 14);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = accent;
+  ctx.stroke();
+  ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(t, cx, y + 11);
+  const ty = y + h / 2 + 1;
+  if (pre) {
+    ctx.globalAlpha = prefixAlpha;
+    ctx.fillStyle = prefixColor || accent;
+    ctx.fillText(pre, x + 12, ty);
+    ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = '#1f2a37';
+  ctx.fillText(t, x + 12 + preW, ty);
 }
 
+// Draws one desk in local tile coordinates (0,0 = tile top-left, CW x CH).
 function drawDesk(desk, index, t) {
   const role = roleOf(desk.id);
-  const col = index % COLS, row = Math.floor(index / COLS);
-  const ox = col * CW, oy = row * CH;
-  const cx = ox + CW / 2;
+  const ox = 0, oy = 0;
+  const cx = CW / 2;
   const s = desk.status;
 
-  // floor tile
-  px(ox + 6, oy + 6, CW - 12, CH - 12, (col + row) % 2 ? '#141c2e' : '#111827');
-  px(ox + 6, oy + CH - 10, CW - 12, 4, '#0b1020');
+  // soft rug under the desk
+  rr(ox + 14, oy + 20, CW - 28, CH - 34, 18, 'rgba(255,255,255,0.3)');
 
   // chair back
-  px(cx - 28, oy + 74, 56, 46, '#374151');
-  px(cx - 24, oy + 78, 48, 38, '#4b5563');
+  rr(cx - 28, oy + 74, 56, 46, 14, '#4b5563');
+  rr(cx - 24, oy + 78, 48, 38, 11, '#6b7280');
 
-  // character
-  const bob = s === 'idle' ? Math.round(Math.sin(t / 700 + index) * 1.5) : 0;
+  // body
+  const bob = s === 'idle' ? Math.sin(t / 700 + index) * 1.5 : 0;
   const hy = oy + 52 + bob;
-  px(cx - 14, hy, 28, 26, role.skin);
-  px(cx - 16, hy - 4, 32, 9, role.hair);
-  px(cx - 16, hy + 4, 4, 12, role.hair);
-  px(cx + 12, hy + 4, 4, 12, role.hair);
+  rr(cx - 22, oy + 80, 44, 34, 14, role.color);
+  rr(cx - 7, oy + 80, 14, 7, 4, role.skin);
+
+  // head + hair
+  soft(6, 2, 0.18);
+  circle(cx, hy + 13, 15, role.skin);
+  noShadow();
+  ctx.beginPath();
+  ctx.arc(cx, hy + 11, 16, Math.PI * 1.02, Math.PI * 1.98);
+  ctx.closePath();
+  ctx.fillStyle = role.hair;
+  ctx.fill();
+  rr(cx - 16, hy + 8, 5, 12, 3, role.hair);
+  rr(cx + 11, hy + 8, 5, 12, 3, role.hair);
+
+  // face
   if (s === 'idle') {
-    px(cx - 9, hy + 14, 6, 2, '#1f2937');
-    px(cx + 3, hy + 14, 6, 2, '#1f2937');
+    ctx.lineWidth = 1.8; ctx.lineCap = 'round'; ctx.strokeStyle = '#1f2937';
+    ctx.beginPath(); ctx.moveTo(cx - 9, hy + 15); ctx.lineTo(cx - 3, hy + 15);
+    ctx.moveTo(cx + 3, hy + 15); ctx.lineTo(cx + 9, hy + 15); ctx.stroke();
   } else {
-    px(cx - 8, hy + 11, 4, 5, '#1f2937');
-    px(cx + 4, hy + 11, 4, 5, '#1f2937');
-    if (s === 'waiting') px(cx - 3, hy + 20, 6, 3, '#7f1d1d');
+    circle(cx - 6, hy + 14, 2.4, '#1f2937');
+    circle(cx + 6, hy + 14, 2.4, '#1f2937');
+    if (s === 'waiting') {
+      ctx.beginPath(); ctx.ellipse(cx, hy + 22, 3, 2.2, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#9b2c2c'; ctx.fill();
+    }
   }
-  px(cx - 22, oy + 80, 44, 32, role.color);
-  px(cx - 6, oy + 80, 12, 5, role.skin);
 
   // screen glow on face while working
   if (s === 'working') {
-    ctx.globalAlpha = 0.18 + 0.08 * Math.sin(t / 120);
-    px(cx - 14, hy, 28, 26, STATUS_COLOR.working);
+    ctx.globalAlpha = 0.16 + 0.08 * Math.sin(t / 120);
+    circle(cx, hy + 13, 15, STATUS_COLOR.working);
     ctx.globalAlpha = 1;
   }
 
   // monitor (back side, facing the character)
-  px(cx - 34, oy + 100, 68, 14, '#9ca3af');
-  px(cx - 30, oy + 103, 60, 3, STATUS_COLOR[s] || STATUS_COLOR.idle);
+  soft(8, 3, 0.2);
+  rr(cx - 34, oy + 100, 68, 16, 6, '#9ca3af');
+  noShadow();
+  rr(cx - 31, oy + 102, 62, 8, 4, '#1f2a37');
+  const hp = { working: 0.6, waiting: 0.3, done: 1, idle: 0.1 }[s] ?? 0.1;
+  rr(cx - 29, oy + 104, 58, 4, 2, '#e5e7eb');
+  rr(cx - 29, oy + 104, Math.max(4, 58 * hp), 4, 2, STATUS_COLOR[s] || STATUS_COLOR.idle);
 
   // arms (drawn over the monitor edge so the typing hands stay visible)
   const typing = s === 'working' ? Math.floor(t / 140 + index) % 2 : 0;
-  px(cx - 42, oy + 104 + (typing ? 2 : 0), 12, 8, role.skin);
-  px(cx + 30, oy + 104 + (typing ? 0 : 2), 12, 8, role.skin);
+  circle(cx - 36, oy + 110 + (typing ? 2 : 0), 6, role.skin);
+  circle(cx + 36, oy + 110 + (typing ? 0 : 2), 6, role.skin);
 
   // desk
-  px(ox + 24, oy + 114, CW - 48, 14, '#8b5e3c');
-  px(ox + 24, oy + 128, CW - 48, 5, '#6b4423');
-  px(ox + 32, oy + 133, 6, 26, '#6b4423');
-  px(ox + CW - 38, oy + 133, 6, 26, '#6b4423');
+  soft(10, 4, 0.22);
+  rr(ox + 24, oy + 114, CW - 48, 18, 8, '#a8744a');
+  noShadow();
+  rr(ox + 24, oy + 114, CW - 48, 6, 4, '#c08b5f');
+  rr(ox + 32, oy + 132, 7, 28, 3, '#7d5232');
+  rr(ox + CW - 39, oy + 132, 7, 28, 3, '#7d5232');
   // mug + papers
-  px(ox + 36, oy + 106, 8, 8, '#e5e7eb');
-  px(ox + CW - 52, oy + 108, 16, 6, '#f3f4f6');
+  rr(ox + 36, oy + 104, 10, 10, 3, '#ffffff');
+  rr(ox + CW - 54, oy + 107, 18, 7, 2, '#f8fafc');
 
   // name plate
-  ctx.font = 'bold 12px ui-monospace, Consolas, monospace';
-  const lw = Math.ceil(ctx.measureText(role.label).width) + 16;
-  px(cx - lw / 2, oy + 164, lw, 20, '#0b1020');
-  px(cx - lw / 2, oy + 164, 3, 20, role.color);
-  ctx.fillStyle = role.color;
+  ctx.font = '800 13px ' + FONT;
+  const lw = Math.ceil(ctx.measureText(role.label).width) + 30;
+  soft(8, 2, 0.18);
+  rr(cx - lw / 2, oy + 160, lw, 26, 13, '#ffffff');
+  noShadow();
+  circle(cx - lw / 2 + 12, oy + 173, 5, role.color);
+  ctx.fillStyle = '#1f2a37';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(role.label, cx + 1, oy + 175);
+  ctx.fillText(role.label, cx + 7, oy + 174);
 
-  // status bubble
-  if (s === 'working') bubble(desk.activity || 'working', cx, oy + 14, '#1e3a8a', '#dbeafe');
-  else if (s === 'waiting' && Math.floor(t / 500) % 2 === 0) bubble('! ' + (desk.activity || 'waiting'), cx, oy + 14, '#78350f', '#fef3c7');
-  else if (s === 'done') bubble('OK ' + (desk.activity || 'done'), cx, oy + 14, '#14532d', '#dcfce7');
+  // status bubble (waiting stays visible; only the "!" blinks)
+  if (s === 'working') bubble(desk.activity || 'working', cx, oy + 8, '#2f6fe0');
+  else if (s === 'waiting') bubble(desk.activity || 'waiting', cx, oy + 8, '#d99a0b', '!', (reduced || Math.floor(t / 500) % 2 === 0) ? 1 : 0.25, '#a86a00');
+  else if (s === 'done') bubble(desk.activity || 'done', cx, oy + 8, '#1f9d55', '✓', 1, '#157a40');
   else if (s === 'idle') {
-    const z = (t / 900 + index) % 1;
+    const z = reduced ? 0.3 : (t / 900 + index) % 1;
     ctx.globalAlpha = 1 - z;
-    ctx.fillStyle = '#9ca3af';
-    ctx.font = 'bold 12px ui-monospace, Consolas, monospace';
+    ctx.fillStyle = '#4b5563';
+    ctx.font = '800 14px ' + FONT;
+    ctx.textAlign = 'center';
     ctx.fillText('z', cx + 22 + z * 8, oy + 48 - z * 20);
     ctx.globalAlpha = 1;
   }
 }
 
-function resize() {
-  const rows = Math.max(1, Math.ceil(desks.length / COLS));
-  const w = COLS * CW, h = rows * CH;
-  if (canvas.width !== w || canvas.height !== h) {
-    canvas.width = w;
-    canvas.height = h;
+// ---------- floorplan ----------
+
+function plant(x, y, r) {
+  soft(5, 2, 0.2);
+  circle(x, y, r * 0.55, '#b7794a');
+  noShadow();
+  circle(x - r * 0.45, y - r * 0.35, r * 0.6, '#3f9d5a');
+  circle(x + r * 0.45, y - r * 0.3, r * 0.6, '#4fb36b');
+  circle(x, y - r * 0.7, r * 0.6, '#2f8a4c');
+}
+
+function drawZone(z) {
+  const lw = z.glass ? 5 : 8;
+  soft(14, 4, 0.14);
+  rr(z.x, z.y, z.w, z.h, 22, z.floor);
+  noShadow();
+
+  // walls (inset so the stroke stays inside the zone)
+  ctx.lineWidth = lw;
+  ctx.strokeStyle = z.glass ? 'rgba(110,185,220,0.85)' : z.wall;
+  rr(z.x + lw / 2, z.y + lw / 2, z.w - lw, z.h - lw, 20);
+  ctx.stroke();
+  if (z.glass) {
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+    rr(z.x + lw / 2, z.y + lw / 2, z.w - lw, z.h - lw, 20);
+    ctx.stroke();
+  }
+
+  // door gap: paint floor over the wall band
+  const d = z.door;
+  if (d) {
+    ctx.fillStyle = z.floor;
+    const band = lw + 2;
+    if (d.side === 'top' || d.side === 'bottom') {
+      const gx = z.x + z.w * d.at - d.len / 2;
+      ctx.fillRect(gx, d.side === 'top' ? z.y : z.y + z.h - band, d.len, band);
+    } else {
+      const gy = z.y + z.h * d.at - d.len / 2;
+      ctx.fillRect(d.side === 'left' ? z.x : z.x + z.w - band, gy, band, d.len);
+    }
+  }
+
+  drawProps(z);
+
+  // zone label
+  ctx.font = '700 15px ' + FONT;
+  const tw = Math.ceil(ctx.measureText(z.label).width) + 24;
+  rr(z.x + 14, z.y + 8, tw, 24, 12, 'rgba(255,255,255,0.85)');
+  ctx.fillStyle = '#1f2a37';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(z.label, z.x + 26, z.y + 21);
+
+  if (z.key === 'guest' && z.empty) {
+    ctx.font = '600 14px ' + FONT;
+    ctx.fillStyle = '#4b5563';
+    ctx.fillText('No visitors right now', z.x + 26, z.y + HDR + 20);
+  }
+}
+
+function drawProps(z) {
+  const x = z.x, y = z.y, w = z.w, h = z.h;
+  if (z.key === 'trainer') {
+    plant(x + w - 26, y + h - 22, 12);
+  } else if (z.key === 'product') {
+    // whiteboard on the top wall
+    const bx = x + w - 210, by = y + 8;
+    soft(4, 2, 0.2);
+    rr(bx, by, 190, 24, 6, '#ffffff');
+    noShadow();
+    ctx.lineWidth = 2; ctx.strokeStyle = '#94a3b8';
+    rr(bx, by, 190, 24, 6); ctx.stroke();
+    ctx.lineCap = 'round'; ctx.lineWidth = 2.5;
+    [['#2f6fe0', 14, 60], ['#d23c3c', 70, 40], ['#1f9d55', 118, 56]].forEach(([c, a, len]) => {
+      ctx.strokeStyle = c; ctx.beginPath();
+      ctx.moveTo(bx + a, by + 9); ctx.lineTo(bx + a + len * 0.6, by + 9);
+      ctx.moveTo(bx + a, by + 16); ctx.lineTo(bx + a + len, by + 16);
+      ctx.stroke();
+    });
+    // small discussion table
+    const tw = 150, th = 34, tx = x + (w - tw) / 2, ty = y + h - th - 10;
+    soft(8, 3, 0.2);
+    rr(tx, ty, tw, th, 17, '#c9a074');
+    noShadow();
+    rr(tx + 6, ty + 4, tw - 12, 8, 4, 'rgba(255,255,255,0.28)');
+    rr(tx + 30, ty + 16, 22, 12, 3, '#f8fafc');
+    circle(tx + 100, ty + 21, 6, '#ffffff');
+  } else if (z.key === 'eng') {
+    // small server rack
+    const rx = x + w - 72, ry = y + 6;
+    soft(4, 2, 0.25);
+    rr(rx, ry, 56, 26, 5, '#374151');
+    noShadow();
+    for (let i = 0; i < 3; i++) {
+      rr(rx + 5 + i * 17, ry + 5, 14, 16, 2, '#4b5563');
+      circle(rx + 12 + i * 17, ry + 13, 2.2, i === 1 ? '#38bdf8' : '#4ade80');
+    }
+  } else if (z.key === 'lounge') {
+    // sofa
+    soft(8, 3, 0.2);
+    rr(x + 18, y + 46, 150, 18, 9, '#c26a5a');
+    rr(x + 18, y + 58, 150, 36, 11, '#e08a78');
+    noShadow();
+    rr(x + 24, y + 64, 66, 26, 8, '#ec9f8d');
+    rr(x + 96, y + 64, 66, 26, 8, '#ec9f8d');
+    // coffee counter + machine
+    const cx0 = x + w - 128;
+    soft(6, 2, 0.2);
+    rr(cx0, y + 46, 110, 36, 8, '#8b6b4f');
+    rr(cx0 + 10, y + 34, 30, 28, 5, '#374151');
+    noShadow();
+    circle(cx0 + 25, y + 44, 3, '#f87171');
+    circle(cx0 + 66, y + 60, 5, '#ffffff');
+    circle(cx0 + 86, y + 60, 5, '#ffffff');
+    // meeting table with chairs
+    const tw = 130, th = 58, tx = x + (w - tw) / 2, ty = y + h - th - 34;
+    [tx + 30, tx + tw - 30].forEach((px) => {
+      circle(px, ty - 8, 9, '#6b7280');
+      circle(px, ty + th + 8, 9, '#6b7280');
+    });
+    soft(8, 3, 0.22);
+    rr(tx, ty, tw, th, 22, '#c9a074');
+    noShadow();
+    rr(tx + 8, ty + 6, tw - 16, 12, 6, 'rgba(255,255,255,0.28)');
+    plant(x + 26, y + h - 24, 12);
+    plant(x + w - 26, y + h - 24, 12);
+  }
+}
+
+function buildLayout(list, cols) {
+  const groups = { trainer: [], product: [], eng: [], qa: [], guest: [] };
+  list.forEach((d, index) => { groups[ZONE_OF[d.id] || 'guest'].push({ desk: d, index }); });
+  const zones = [], places = [];
+  const zone = (key, x, y, w, h) => { const z = { key, x, y, w, h, ...ZONES[key] }; zones.push(z); return z; };
+  const grid = (z, items, c) => {
+    const gx = z.x + (z.w - c * CW) / 2;
+    items.forEach((p, i) => places.push({ ...p, x: gx + (i % c) * CW, y: z.y + HDR + Math.floor(i / c) * CH, k: 1 }));
+  };
+  const trainer = (z, items) => items.forEach((p) => places.push({ ...p, x: z.x + (z.w - CW * TK) / 2, y: z.y + HDR, k: TK }));
+  const guests = (x, y, w, c) => {
+    const n = groups.guest.length;
+    const z = zone('guest', x, y, w, n ? HDR + Math.ceil(n / c) * CH + 10 : HDR + 44);
+    z.empty = !n;
+    grid(z, groups.guest, c);
+    return z;
+  };
+  let W, H;
+  if (!cols) {
+    W = 1270;
+    trainer(zone('trainer', 10, 10, 250, 280), groups.trainer);
+    grid(zone('product', 270, 10, 620, 280), groups.product, 3);
+    zone('lounge', 900, 10, 360, 280);
+    grid(zone('eng', 10, 300, 820, HDR + CH + 10), groups.eng, 4);
+    grid(zone('qa', 840, 300, 420, HDR + CH + 10), groups.qa, 2);
+    const g = guests(10, 300 + HDR + CH + 20, 1250, 6);
+    H = g.y + g.h + 10;
+  } else {
+    W = cols * CW + 40;
+    const zw = W - 20;
+    let y = 10;
+    const next = (key, h) => { const z = zone(key, 10, y, zw, h); y += h + 10; return z; };
+    const rows = (key) => Math.ceil(ZONE_IDS[key].length / cols);
+    trainer(next('trainer', HDR + Math.ceil(CH * TK) + 14), groups.trainer);
+    grid(next('product', HDR + rows('product') * CH + 54), groups.product, cols);
+    grid(next('eng', HDR + rows('eng') * CH + 10), groups.eng, cols);
+    grid(next('qa', HDR + rows('qa') * CH + 10), groups.qa, cols);
+    next('lounge', 230);
+    const n = groups.guest.length;
+    const g = next('guest', n ? HDR + Math.ceil(n / cols) * CH + 10 : HDR + 44);
+    g.empty = !n;
+    grid(g, groups.guest, cols);
+    H = y;
+  }
+  return { w: W, h: H, cols, zones, places };
+}
+
+function measureStage() {
+  const cs = getComputedStyle(stage);
+  availW = Math.max(0, stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+  layoutDirty = true;
+}
+if (window.ResizeObserver) new ResizeObserver(measureStage).observe(stage);
+window.addEventListener('resize', measureStage);
+
+// Make sure the web font is ready for canvas text (frames redraw continuously, so it appears once loaded).
+if (document.fonts && document.fonts.load) {
+  Promise.all([document.fonts.load('700 13px Nunito'), document.fonts.load('800 13px Nunito')]).catch(() => {});
+}
+
+let warned = false;
+function warnOnce(err) {
+  if (warned) return;
+  warned = true;
+  console.error('Canvas draw error', err);
+}
+
+let sizedKey = '';
+function render(t) {
+  if (availW == null) measureStage();
+  // wide floorplan when there is room, otherwise stacked zones with 3 or 2 desk columns
+  const cols = availW >= 1100 ? 0 : availW >= 700 ? 3 : 2;
+  if (layoutDirty || !layout || layout.cols !== cols) {
+    layout = buildLayout(desks, cols);
+    layoutDirty = false;
+  }
+  const LW = layout.w, LH = layout.h;
+  const cssW = Math.round(cols ? Math.max(LW, Math.min(availW, LW * 1.6)) : Math.min(availW, 1650));
+  if (cssW <= 0) return;
+  const cssH = Math.round(LH * cssW / LW);
+  dpr = Math.max(1, window.devicePixelRatio || 1);
+  const pw = Math.round(cssW * dpr), ph = Math.round(cssH * dpr);
+  if (canvas.width !== pw || canvas.height !== ph) { canvas.width = pw; canvas.height = ph; }
+  const key = cssW + 'x' + cssH;
+  if (key !== sizedKey) { canvas.style.width = cssW + 'px'; canvas.style.height = cssH + 'px'; sizedKey = key; }
+  shadowK = pw / LW;
+  ctx.setTransform(pw / LW, 0, 0, ph / LH, 0, 0);
+  noShadow();
+  ctx.globalAlpha = 1;
+  ctx.clearRect(0, 0, LW, LH);
+  ctx.fillStyle = CORRIDOR;
+  ctx.fillRect(0, 0, LW, LH);
+
+  for (const z of layout.zones) {
+    ctx.save();
+    try { drawZone(z); } catch (err) { warnOnce(err); } finally { ctx.restore(); }
+  }
+  for (const p of layout.places) {
+    ctx.save();
+    try {
+      ctx.translate(p.x, p.y);
+      ctx.scale(p.k, p.k);
+      drawDesk(p.desk, p.index, t);
+    } catch (err) { warnOnce(err); } finally { ctx.restore(); }
   }
 }
 
 function frame(t) {
-  resize();
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  desks.forEach((d, i) => drawDesk(d, i, t));
   requestAnimationFrame(frame);
+  try { render(reduced ? 0 : t); } catch (err) { warnOnce(err); }
 }
 
 function orderDesks(map) {
-  const known = Object.keys(ROLES).filter((id) => map[id]).map((id) => map[id]);
-  const guests = Object.values(map).filter((d) => !ROLES[d.id]).sort((a, b) => a.id.localeCompare(b.id));
+  const known = Object.keys(ROLES).filter((id) => hasOwn(map, id) && map[id]).map((id) => map[id]);
+  const guests = Object.values(map).filter((d) => d && !hasOwn(ROLES, d.id)).sort((a, b) => String(a.id).localeCompare(String(b.id)));
   return known.concat(guests);
 }
 
@@ -204,16 +575,18 @@ const logEl = document.getElementById('log');
 function renderLog(entries) {
   logEl.textContent = '';
   for (const e of entries.slice().reverse()) {
+    if (!e) continue;
+    const role = roleOf(e.desk);
     const li = document.createElement('li');
     const time = document.createElement('span');
     time.className = 'time';
     time.textContent = new Date(e.t).toLocaleTimeString();
     const who = document.createElement('span');
     who.className = 'who';
-    who.style.color = roleOf(e.desk).color;
-    who.textContent = roleOf(e.desk).label;
+    who.style.borderLeftColor = role.color;
+    who.textContent = role.label || 'Unknown';
     const text = document.createElement('span');
-    text.textContent = e.text;
+    text.textContent = String(e.text ?? '');
     li.append(time, who, text);
     logEl.append(li);
   }
@@ -298,8 +671,12 @@ source.onerror = () => {
 source.onmessage = (msg) => {
   try {
     const state = JSON.parse(msg.data);
+    renderLog(Array.isArray(state.log) ? state.log : []);
     desks = orderDesks(state.desks || {});
-    renderLog(state.log || []);
+    layoutDirty = true;
+    canvas.setAttribute('aria-label', 'Office floorplan. ' + (desks.length
+      ? desks.map((d) => roleOf(d.id).label + ': ' + (d.status || 'unknown')).join('; ')
+      : 'No agents yet.'));
   } catch (err) {
     console.error('Invalid state message', err);
   }
