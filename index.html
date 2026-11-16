@@ -306,6 +306,7 @@
       'lead-business-analyst': { label: 'Business Analyst', color: '#14b8a6', hair: '#7c2d12', skin: '#ffdbac', g: 'm', hs: 'side', outfit: 'tie', glasses: true },
       'lead-solution-engineer': { label: 'Solution Eng', color: '#6366f1', hair: '#1f2937', skin: '#c68642', g: 'm', hs: 'quiff', outfit: 'polo', stubble: true },
       'lead-ux': { label: 'Lead UX', color: '#84cc16', hair: '#78350f', skin: '#f1c27d', g: 'f', hs: 'bun', outfit: 'blouse' },
+      'lead-system-analyst': { label: 'System Analyst', color: '#f97316', hair: '#374151', skin: '#d9a066', g: 'm', hs: 'undercut', outfit: 'tie' },
       'lead-software-engineer': { label: 'Lead SWE', color: '#3b82f6', hair: '#0f172a', skin: '#f1c27d', g: 'f', hs: 'pony', outfit: 'blouse' },
       'lead-ui': { label: 'Lead UI', color: '#ec4899', hair: '#a16207', skin: '#ffdbac', g: 'f', hs: 'bob', outfit: 'dress' },
       'lead-qa': { label: 'Lead QA', color: '#22c55e', hair: '#451a03', skin: '#8d5524', g: 'm', hs: 'undercut', outfit: 'polo', pants: '#1f2937' },
@@ -313,7 +314,7 @@
       'lead-dba': { label: 'Lead DBA', color: '#a855f7', hair: '#57534e', skin: '#c68642', g: 'm', hs: 'wave', outfit: 'blazer', glasses: true, pants: '#44403c' },
       'lead-devops': { label: 'Lead DevOps', color: '#0ea5e9', hair: '#292524', skin: '#f1c27d', g: 'm', hs: 'side', outfit: 'polo', stubble: true },
     };
-    const PLAQUE_LABEL = { 'product-manager': 'Product Mgr', 'lead-business-analyst': 'Biz Analyst', 'lead-solution-engineer': 'Solution Eng' };
+    const PLAQUE_LABEL = { 'product-manager': 'Product Mgr', 'lead-business-analyst': 'Biz Analyst', 'lead-solution-engineer': 'Solution Eng', 'lead-system-analyst': 'Sys Analyst' };
     const plaqueText = (id, label) => {
       if (hasOwn(PLAQUE_LABEL, id)) return PLAQUE_LABEL[id];
       const c = Array.from(label);
@@ -325,7 +326,7 @@
     // Zones by role id. Any id not listed here goes to the guest area.
     const ZONE_IDS = {
       trainer: ['main'],
-      product: ['product-manager', 'lead-business-analyst', 'lead-solution-engineer', 'lead-ux'],
+      product: ['product-manager', 'lead-business-analyst', 'lead-system-analyst', 'lead-solution-engineer', 'lead-ux'],
       eng: ['lead-software-engineer', 'lead-ui', 'lead-dba', 'lead-devops'],
       qa: ['lead-qa', 'lead-security'],
     };
@@ -1400,11 +1401,11 @@
       let W, H;
       if (!stacked) {
         const R1 = 284, R2 = HDR + CH + LBL + 14, y2 = 10 + R1 + GAP;
-        const tw = 260, pw = 4 * CW + 30, lw = 350;
+        const tw = 260, pw = 5 * CW + 30, lw = 350;
         const px = 10 + tw + GAP, lx = px + pw + GAP, right = lx + lw;
         W = right + 10;
         trainer(zone('trainer', 10, 10, tw, R1, 0), groups.trainer);
-        grid(zone('product', px, 10, pw, R1, 0), groups.product, 4);
+        grid(zone('product', px, 10, pw, R1, 0), groups.product, 5);
         zone('lounge', lx, 10, lw, R1, 0);
         const ew = 4 * CW + 20, qx = 10 + ew + GAP;
         grid(zone('eng', 10, y2, ew, R2, 1), groups.eng, 4);

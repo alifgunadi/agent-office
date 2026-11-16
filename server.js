@@ -37,6 +37,7 @@ const ROLE_IDS = [
   'lead-business-analyst',
   'lead-solution-engineer',
   'lead-ux',
+  'lead-system-analyst',
   'lead-software-engineer',
   'lead-ui',
   'lead-qa',
