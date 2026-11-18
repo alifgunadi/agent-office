@@ -12,7 +12,7 @@ characters type, wait, or sleep based on hook events.
 - `start-office.ps1` / `stop-office.ps1` - start in the background and open the browser / stop.
 - `install-autostart.ps1` / `uninstall-autostart.ps1` - optional Windows logon task.
 
-## Connecting to Claude Code and Antigravity
+## Connecting to Claude Code, Antigravity and OpenCode
 
 ### Claude Code
 1. Merge the `hooks` object from `hooks-settings-snippet.json` into `~/.claude/settings.json`.
@@ -27,6 +27,35 @@ Antigravity uses plugin-scoped `hooks.json` with camelCase stdin payloads (`hook
    - `PostToolUse`: post `PreToolUse` / `PostToolUseFailure` for `main` (never `PreToolUse` in `hooks.json`, so tool permission prompts are not altered). When `toolCall.name === "invoke_subagent"`, also emit `SubagentStart` with `agent_type: toolCall.args.TypeName`; print `{}`.
    - `Stop`: emit `SubagentStop` for any active subagents tracked in that `conversationId`, then emit `Stop` for `main`; print `{"decision":"stop"}`.
 3. Every `POST /event` request must include `X-Agent-Office: 1`. Both Claude Code and Antigravity can run against the same `127.0.0.1:4317` server without interfering with each other.
+
+### OpenCode (V2)
+OpenCode has no `settings.json` hooks, so it connects through a global plugin. The plugin lives outside this repo
+and does not change anything in it.
+1. Create `~/.config/opencode/plugins/agent-office.js` (on Windows: `C:\Users\<you>\.config\opencode\plugins\agent-office.js`).
+   OpenCode loads every file in that folder automatically; no entry in `opencode.json` is needed.
+2. The plugin must `export default { id: "agent-office", setup(ctx) { ... } }`. The V2 loader rejects a default export
+   without `id` plus `setup` (or `effect`) with `Plugin must export a default definition with an id and an effect or setup function.`
+3. Inside `setup(ctx)` it translates OpenCode events into the same payloads `hook.js` sends and POSTs them to
+   `http://127.0.0.1:4317/event` with header `X-Agent-Office: 1`:
+
+   | OpenCode source | Agent Office event |
+   |---|---|
+   | `ctx.event.subscribe`: `session.created` / `session.deleted` | `SessionStart` / `SessionEnd` |
+   | `session.execution.started` | `UserPromptSubmit` |
+   | `session.execution.succeeded` / `failed` / `interrupted` | `Stop` |
+   | `permission.asked` / `form.created` | `Notification` (`permission_prompt` / `idle_prompt`) |
+   | `ctx.tool.hook("execute.before")`, tool `task` | `SubagentStart` (`agent_type` = basename of `subagent_type`) |
+   | `ctx.tool.hook("execute.after")`, tool `task` | `SubagentStop` |
+   | `ctx.tool.hook("execute.before")`, other tools | `PreToolUse` |
+
+4. On load the plugin starts the server with `spawn("node", ["C:/projects/agent-office/ensure-server.js"])`.
+   Use `"node"`, not `process.execPath`: inside OpenCode `process.execPath` is the `opencode` binary and fails with `ENOTDIR`.
+5. Restart OpenCode (or wait for hot reload). Check `~/.local/share/opencode/log/opencode.log` for `agent-office` if no desk moves.
+
+Notes:
+- Nested agent IDs map to the flat desk id: `engineering/lead-dba` becomes `lead-dba`, so the agent file name must match `ROLE_IDS` in `server.js`.
+- Tool calls made inside a subagent currently show on the `main` desk, not the subagent desk.
+- OpenCode, Claude Code and Antigravity can all report to the same server at once.
 
 ## Privacy
 `hook.js` forwards only: event name, session/agent ids, agent type, tool name, file name,
