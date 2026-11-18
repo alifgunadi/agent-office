@@ -68,7 +68,7 @@ The hook fails silently in a few milliseconds. Claude Code is not affected.
 
 ## Desk mapping
 - Subagent events (`SubagentStart`/`SubagentStop`) use `agent_type` = the agent's `name` frontmatter.
-- Tool events go to the subagent desk when Claude Code includes `agent_id`/`agent_type`, otherwise to "Trainer".
+- Tool events go to the subagent desk when Claude Code includes `agent_id`/`agent_type`, otherwise to "AlifGunadi".
 - Unknown agent types (e.g. `Explore`, `general-purpose`, teammates) get a guest desk automatically.
 
 ## Change port
