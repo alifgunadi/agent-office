@@ -1,7 +1,7 @@
 # Agent Office
 
-Live pixel-art office for Claude Code agents. Each role in `~/.claude/agents` has a fixed desk;
-characters type, wait, or sleep based on Claude Code hook events.
+Live pixel-art office for Claude Code and Antigravity agents. Each role in `~/.claude/agents` (or Antigravity `team-*` plugins) has a fixed desk;
+characters type, wait, or sleep based on hook events.
 
 ## Files
 - `server.js`  - local server (127.0.0.1:4317), no dependencies. Runs with `node` or `bun`.
@@ -11,6 +11,22 @@ characters type, wait, or sleep based on Claude Code hook events.
 - `hooks-settings-snippet.json` - hooks config to merge into `~/.claude/settings.json`.
 - `start-office.ps1` / `stop-office.ps1` - start in the background and open the browser / stop.
 - `install-autostart.ps1` / `uninstall-autostart.ps1` - optional Windows logon task.
+
+## Connecting to Claude Code and Antigravity
+
+### Claude Code
+1. Merge the `hooks` object from `hooks-settings-snippet.json` into `~/.claude/settings.json`.
+2. On `SessionStart`, `ensure-server.js` starts `server.js` if not already running, and `hook.js` forwards Claude Code lifecycle events (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUseFailure`, `Notification`, `SubagentStart`, `SubagentStop`, `TeammateIdle`, `Stop`, `SessionEnd`) to `http://127.0.0.1:4317/event`.
+
+### Antigravity
+Antigravity uses plugin-scoped `hooks.json` with camelCase stdin payloads (`hookEventName`, `conversationId`, `toolCall`) and expects JSON on stdout:
+1. In an active Antigravity plugin (for example `~/.gemini/config/plugins/migrated-settings/`), add `hooks.json` and a small Node adapter script (e.g. `agy-office-hook.js`).
+2. Subscribe to `SessionStart`, `PreInvocation`, `PostToolUse` (matcher `".*"`), and `Stop` in `hooks.json` pointing to `node ./agy-office-hook.js`:
+   - `SessionStart`: spawn `C:/projects/agent-office/ensure-server.js` (detached) and post `SessionStart`; print `{}`.
+   - `PreInvocation`: post `UserPromptSubmit` for `main`; print `{}`.
+   - `PostToolUse`: post `PreToolUse` / `PostToolUseFailure` for `main` (never `PreToolUse` in `hooks.json`, so tool permission prompts are not altered). When `toolCall.name === "invoke_subagent"`, also emit `SubagentStart` with `agent_type: toolCall.args.TypeName`; print `{}`.
+   - `Stop`: emit `SubagentStop` for any active subagents tracked in that `conversationId`, then emit `Stop` for `main`; print `{"decision":"stop"}`.
+3. Every `POST /event` request must include `X-Agent-Office: 1`. Both Claude Code and Antigravity can run against the same `127.0.0.1:4317` server without interfering with each other.
 
 ## Privacy
 `hook.js` forwards only: event name, session/agent ids, agent type, tool name, file name,
