@@ -16,6 +16,7 @@ internal sealed class WindowSettings
 
     private static string FilePath => Path.Combine(DataDir, "window.json");
 
+    [System.Text.Json.Serialization.JsonIgnore]
     public Rectangle Bounds => new(X, Y, Width, Height);
 
     public static WindowSettings? Load()

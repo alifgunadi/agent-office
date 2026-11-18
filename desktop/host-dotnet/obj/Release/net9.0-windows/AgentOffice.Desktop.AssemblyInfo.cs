@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AgentOffice")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0d3e63faaae48ba15557c5f2d8a4cdcd17511bde")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ec59c470b91593df3d301f5d5042ea3c0a340c7e")]
 [assembly: System.Reflection.AssemblyProductAttribute("Agent Office")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AgentOffice")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -1,0 +1,8 @@
+# Removes the "Agent Office" Desktop and Start Menu shortcuts created by install-shortcut.ps1.
+$paths = @(
+  (Join-Path ([Environment]::GetFolderPath("Desktop")) "Agent Office.lnk"),
+  (Join-Path ([Environment]::GetFolderPath("Programs")) "Agent Office.lnk")
+)
+foreach ($path in $paths) {
+  if (Test-Path $path) { Remove-Item $path; Write-Output "Removed $path" }
+}

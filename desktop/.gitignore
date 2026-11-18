@@ -1,0 +1,4 @@
+host-dotnet/bin/
+host-dotnet/obj/
+app/
+tools/out/
