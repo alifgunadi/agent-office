@@ -427,7 +427,7 @@
     const motionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
     let reduced = !!(motionQuery && motionQuery.matches);
     if (motionQuery) {
-      const onMotion = (e) => { reduced = e.matches; requestRender(); };
+      const onMotion = (e) => { reduced = e.matches; renderNow(); };
       if (motionQuery.addEventListener) motionQuery.addEventListener('change', onMotion);
       else if (motionQuery.addListener) motionQuery.addListener(onMotion);
     }
@@ -1771,12 +1771,15 @@
       layoutDirty = true;
       requestRender();
     }
-    if (window.ResizeObserver) new ResizeObserver(measureStage).observe(stage);
-    window.addEventListener('resize', measureStage);
+    // A resize clears the canvas, so redraw right away instead of waiting for an animation frame
+    // (frames do not run for a covered window, and with reduced motion nothing else would redraw it).
+    const onStageResize = () => { measureStage(); renderNow(); };
+    if (window.ResizeObserver) new ResizeObserver(onStageResize).observe(stage);
+    window.addEventListener('resize', onStageResize);
 
     // Make sure the web font is ready for canvas text (frames redraw continuously, so it appears once loaded).
     if (document.fonts && document.fonts.load) {
-      Promise.all([document.fonts.load('700 13px Nunito'), document.fonts.load('800 13px Nunito')]).then(requestRender, () => { });
+      Promise.all([document.fonts.load('700 13px Nunito'), document.fonts.load('800 13px Nunito')]).then(renderNow, () => { });
     }
 
     let warned = false;
@@ -1848,11 +1851,17 @@
 
     // Render loop: runs only while the page is visible. With reduced motion nothing animates, so it draws on demand
     // (a state change, resize, pointer move) plus a slow tick for the idle-to-lounge timer. When no agent is working
-    // or walking the animation is light, so it is drawn at about 30 fps instead of the display rate.
+    // or walking the animation is light, so it is drawn at about 30 fps; otherwise at most about 60 fps.
     let rafId = 0, lastDraw = 0, dirty = true, lastBusy = true;
     function requestRender() {
       dirty = true;
       if (!rafId && !document.hidden) rafId = requestAnimationFrame(frame);
+    }
+    function renderNow() {
+      if (document.hidden) { requestRender(); return; }
+      dirty = true;
+      if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+      frame(performance.now());
     }
     function isBusy() {
       for (const a of agents.values()) if (a.dir !== 0 || a.st || a.status === 'working') return true;
@@ -1863,7 +1872,8 @@
       if (document.hidden) return;
       applyPending();
       if (reduced && !dirty) return;
-      if (!reduced && !lastBusy && !dirty && t - lastDraw < 30) { rafId = requestAnimationFrame(frame); return; }
+      // at most ~60 fps even on a 120/144 Hz display, ~30 fps when nothing is moving
+      if (!reduced && t - lastDraw < (lastBusy || dirty ? 15 : 30)) { rafId = requestAnimationFrame(frame); return; }
       dirty = false;
       lastDraw = t;
       try { render(t); } catch (err) { warnOnce(err); }

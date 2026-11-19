@@ -140,6 +140,19 @@ describe('guest desks', () => {
 });
 
 describe('sessions', () => {
+  it('a session starting later does not wipe the main desk another live session is working on', () => {
+    send({ hook_event_name: 'SessionStart', session_id: 'A' });
+    send({ hook_event_name: 'PreToolUse', session_id: 'A', tool_name: 'Edit', tool_input: { file_path: 'a.js' } });
+    send({ hook_event_name: 'SessionStart', session_id: 'B', source: 'opencode' });
+    assert.equal(desk('main').status, 'working');
+    assert.equal(desk('main').activity, 'Edit a.js');
+  });
+
+  it('a session starting on an idle main desk still shows "session started"', () => {
+    send({ hook_event_name: 'SessionStart', session_id: 'A' });
+    assert.equal(desk('main').activity, 'session started');
+  });
+
   it('SessionEnd of one session leaves the work of another live session alone', () => {
     send({ hook_event_name: 'SessionStart', session_id: 'A' });
     send({ hook_event_name: 'SessionStart', session_id: 'B' });
