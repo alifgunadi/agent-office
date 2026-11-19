@@ -18,6 +18,11 @@ describe('pageCsp', () => {
     assert.match(csp, /connect-src 'self'/);
   });
 
+  it('gives the same hashes for Windows and Unix line endings (browsers normalise them)', () => {
+    const lf = '<style>a{\n}</style><script>var x=1;\nvar y=2;\n</script>';
+    assert.equal(pageCsp(lf.replace(/\n/g, '\r\n')), pageCsp(lf));
+  });
+
   it('changes when the inline script changes', () => {
     assert.notEqual(pageCsp('<script>a</script>'), pageCsp('<script>b</script>'));
   });
@@ -46,7 +51,7 @@ describe('served responses', () => {
     const res = await srv.request('GET', '/');
     const crypto = require('node:crypto');
     const m = res.text.match(/<script>([\s\S]*?)<\/script>/);
-    const h = crypto.createHash('sha256').update(m[1], 'utf8').digest('base64');
+    const h = crypto.createHash('sha256').update(m[1].replace(/\r\n?/g, '\n'), 'utf8').digest('base64');
     assert.ok(res.headers['content-security-policy'].includes(`'sha256-${h}'`));
   });
 
