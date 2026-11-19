@@ -30,6 +30,9 @@ function syncAgentList(list) {
       li.tabIndex = 0;
       li.dataset.id = d.id;
       li.addEventListener('focus', () => { focusId = li.dataset.id; requestRender(); });
+      li.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); commandForDesk(li.dataset.id); } // the same as clicking that desk
+      });
       li.addEventListener('blur', () => { if (focusId === li.dataset.id) focusId = null; requestRender(); });
       listItems.set(d.id, li);
     }

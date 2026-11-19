@@ -271,6 +271,25 @@ canvas {
   color: var(--color-muted);
 }
 
+/* ---------- toast (short message over the stage) ---------- */
+
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-6);
+  transform: translateX(-50%);
+  max-width: calc(100% - 2 * var(--space-6));
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--fs-13);
+  line-height: var(--lh-20);
+  font-weight: 700;
+  color: var(--color-paper);
+  background: var(--color-ink);
+  border-radius: var(--radius-12);
+  box-shadow: var(--shadow-float);
+  pointer-events: none;
+}
+
 /* ---------- camera card and minimap (overlays on the stage) ---------- */
 
 .camera-card {

@@ -18,7 +18,7 @@ const { launch } = require('./harness');
         const before = page.problems.length;
         try {
           await page.viewport(1440, 900); // every case starts from the same window and the default camera
-          await page.evaluate("typeof resetCamera === 'function' && (resetCamera(), setMinimized(false), true)");
+          await page.evaluate("typeof resetCamera === 'function' && (resetCamera(), setMinimized(false), (() => { const a = mainAgent(); if (a) { a.man = null; a.s = 0; a.chair = 0; } toastEl.hidden = true; hover = null; flash = null; })(), true)");
           await c.run(page);
           const fresh = page.problems.slice(before);
           if (fresh.length) throw new Error('page problems: ' + fresh.join(' | '));

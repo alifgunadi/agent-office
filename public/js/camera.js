@@ -168,13 +168,13 @@ window.addEventListener('pointermove', (e) => {
   if (!drag || e.pointerId !== drag.id) return;
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (!drag.moved && Math.hypot(dx, dy) < 4) return; // a click, not a drag: keeps clicks on desks working
-  if (!drag.moved) { drag.moved = true; canvas.style.cursor = 'grabbing'; }
+  if (!drag.moved) { drag.moved = true; requestRender(); } // the cursor is chosen in canvasCursor() (control.js)
   stage.scrollLeft = drag.left - dx;
   stage.scrollTop = drag.top - dy;
 });
 function endDrag(e) {
   if (!drag || (e && e.pointerId !== drag.id)) return;
-  if (drag.moved) canvas.style.cursor = '';
+  if (drag.moved) { suppressClick = true; setTimeout(() => { suppressClick = false; }, 0); requestRender(); } // the click that follows a drag is not a click
   drag = null;
 }
 window.addEventListener('pointerup', endDrag);

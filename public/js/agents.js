@@ -121,6 +121,7 @@ function updateAgents(dt, now, big) {
   for (const a of agents.values()) {
     const p = L.byId.get(a.id);
     if (!p) continue;
+    if (a.id === MAIN_ID && a.man && updateMain(a, dt, now)) continue; // under manual control (control.js)
     const idle = !a.guest && a.status === 'idle';
     if (a.snap) {
       a.snap = false;

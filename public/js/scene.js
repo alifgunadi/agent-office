@@ -28,9 +28,13 @@ function drawAgent(a, p) {
   } else if (slot && slot.z > 0 && a.total - a.s < 18) {
     z = slot.z * (1 - (a.total - a.s) / 18);
   }
+  if (a.man) { // AlifGunadi under manual control: walking, or standing and looking where he is heading
+    pose = a.man.moving ? 'walk' : 'stand'; z = 0; anim = null; face = 'front'; side = false;
+    if (!a.man.moving) { const f = facingOf(a.man.facing[0], a.man.facing[1]); face = f.face; side = f.side; flip = f.flip; } else flip = a.flip;
+  }
   const v = pj(a.x, a.y, z);
   drawChar(role, v[0], v[1], {
-    pose, face, anim, side, flip, ph: a.s * STRIDE + (a.st ? a.st.p * STRIDE : 0), t: animT, seed: a.seed, k: p.k * P.cs,
+    pose, face, anim, side, flip, ph: a.s * STRIDE + (a.st ? a.st.p * STRIDE : 0) + (a.man ? a.man.dist * STRIDE : 0), t: animT, seed: a.seed, k: p.k * P.cs,
     status: st, sleepy: atDesk && st === 'idle',
     speak: !!(ch && ch.speak), look: ch ? ch.look : 0, laugh: !!(ch && ch.laugh), nod: !!(ch && ch.nod),
   }, a);
@@ -86,7 +90,9 @@ function drawOverlays(cssW) {
         circle(a.hx * sc, a.hy * sc - 8, 5, '#ffffff');
         circle(a.hx * sc, a.hy * sc - 8, 3.5, role.color);
       });
-      if (a.chat && a.chat.speak && a.loc === 'in the lounge') {
+      if (a.man && a.man.mode === 'conversing') {
+        draws.push(() => speechIcon(cx, a.hy * sc - 60, '💬'));
+      } else if (a.chat && a.chat.speak && a.loc === 'in the lounge') {
         const icon = a.chat.icon;
         draws.push(() => speechIcon(cx, a.hy * sc - 60, icon));
       }
@@ -121,7 +127,8 @@ function drawOverlays(cssW) {
   }
   for (const group of [dots, draws, bubbles, tags]) for (const f of group) safe(f);
   if (hoverTag) safe(hoverTag);
-  canvas.style.cursor = '';
+  const cursor = canvasCursor();
+  if (canvas.style.cursor !== cursor) canvas.style.cursor = cursor;
 }
 
 function measureStage() {
@@ -214,7 +221,9 @@ function render(t) {
   }
   for (const it of depthSort(list)) safe(it.draw);
   for (const f of layout.tags) safe(f); // desk name pills (camera turns other than 0)
+  safe(() => drawNavMarks(t));
   drawOverlays(cssW);
+  safe(drawHoverTip);
 }
 
 // Render loop: runs only while the page is visible. With reduced motion nothing animates, so it draws on demand

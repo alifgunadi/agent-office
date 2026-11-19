@@ -176,7 +176,7 @@ function depthSort(items) {
 function addItem(L, x0, y0, x1, y1, draw, h) {
   // sorted by the rectangle in view coordinates (the order is about what is in front of what on screen); drawn with world coordinates
   const r = viewRect(x0, y0, x1, y1);
-  L.items.push({ x0: r[0], y0: r[1], x1: r[2], y1: r[3], k: P.s > 0 ? (r[0] + r[2] + r[1] + r[3]) / 2 : (r[1] + r[3]) / 2, draw, sb: footprintBox(x0, y0, x1, y1, h || 60) });
+  L.items.push({ wr: [x0, y0, x1, y1], x0: r[0], y0: r[1], x1: r[2], y1: r[3], k: P.s > 0 ? (r[0] + r[2] + r[1] + r[3]) / 2 : (r[1] + r[3]) / 2, draw, sb: footprintBox(x0, y0, x1, y1, h || 60) });
 }
 function addBoxItem(L, x0, y0, x1, y1, z0, z1, col, o) {
   addItem(L, x0, y0, x1, y1, () => box(x0, y0, x1, y1, z0, z1, col, o), z1);

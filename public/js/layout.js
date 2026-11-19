@@ -121,12 +121,23 @@ function drawFloorLabel(z) {
   ctx.restore();
 }
 
+// The navigation grid of a layout, built the first time someone needs it. It treats every solid item, the chairs of the other desks
+// and the sofa cushions as obstacles; the grid is for AlifGunadi, so his own chair is free.
+function layoutNav(L) {
+  if (!L.nav) {
+    const obstacles = L.items.map((it) => ({ x0: it.wr[0], y0: it.wr[1], x1: it.wr[2], y1: it.wr[3] }));
+    for (const o of L.obstacles) if (o.owner !== OfficeRoles.MAIN_DESK) obstacles.push(o);
+    L.nav = buildNavGrid({ w: L.W, h: L.H }, obstacles);
+  }
+  return L.nav;
+}
+
 function buildLayout(list, cols) {
   setProj(cols);
   const stacked = cols > 0;
   const groups = { trainer: [], product: [], eng: [], qa: [], guest: [] };
   list.forEach((d, index) => { groups[ZONE_OF[d.id] || 'guest'].push({ id: d.id, index }); });
-  const L = { cols, zones: [], places: [], byId: new Map(), floors: [], ground: [], items: [], tags: [], ver: ++layoutVer };
+  const L = { cols, zones: [], places: [], byId: new Map(), floors: [], ground: [], items: [], tags: [], obstacles: [], nav: null, ver: ++layoutVer };
   const zone = (key, x, y, w, h, row) => {
     const z = Object.assign({ key, x, y, w, h, row }, ZONES[key]);
     z.hN = z.glass ? WG : (row === 0 ? WH : WL);
@@ -228,10 +239,12 @@ function buildLayout(list, cols) {
 function addWalls(L, z) {
   const g = !!z.glass, T = g ? T_GLASS : T_WALL, col = g ? '#8fcbe6' : z.wall;
   const o = g ? { glass: true, noShadow: true } : {};
-  runs(z.x + T, z.x + z.w, gapsFor(z, 'top')).forEach(([a, b]) => addBoxItem(L, a, z.y, b, z.y + T, 0, wallHeight(z, 'top'), col, o));
-  runs(z.y, z.y + z.h, gapsFor(z, 'left')).forEach(([a, b]) => addBoxItem(L, z.x, a, z.x + T, b, 0, wallHeight(z, 'left'), col, o));
-  runs(z.x + T, z.x + z.w, gapsFor(z, 'bottom')).forEach(([a, b]) => addBoxItem(L, a, z.y + z.h - T, b, z.y + z.h, 0, wallHeight(z, 'bottom'), col, o));
-  runs(z.y + T, z.y + z.h - T, gapsFor(z, 'right')).forEach(([a, b]) => addBoxItem(L, z.x + z.w - T, a, z.x + z.w, b, 0, wallHeight(z, 'right'), col, o));
+  // wall items are marked so a click on a wall (above the floor line it stands on) is refused (see hitTest in control.js)
+  const wall = (x0, y0, x1, y1, h) => { addBoxItem(L, x0, y0, x1, y1, 0, h, col, o); const it = L.items[L.items.length - 1]; it.wall = true; it.h = h; };
+  runs(z.x + T, z.x + z.w, gapsFor(z, 'top')).forEach(([a, b]) => wall(a, z.y, b, z.y + T, wallHeight(z, 'top')));
+  runs(z.y, z.y + z.h, gapsFor(z, 'left')).forEach(([a, b]) => wall(z.x, a, z.x + T, b, wallHeight(z, 'left')));
+  runs(z.x + T, z.x + z.w, gapsFor(z, 'bottom')).forEach(([a, b]) => wall(a, z.y + z.h - T, b, z.y + z.h, wallHeight(z, 'bottom')));
+  runs(z.y + T, z.y + z.h - T, gapsFor(z, 'right')).forEach(([a, b]) => wall(z.x + z.w - T, a, z.x + z.w, b, wallHeight(z, 'right')));
 }
 
 // The four walls of a room, by the direction they face in the world.
@@ -315,6 +328,8 @@ function addLounge(L) {
     for (let i = 0; i < 3; i++) box(X + 47 + i * 50, Y + 52, X + 95 + i * 50, Y + 80, 0, SEAT, '#e08a78', { noShadow: true });
     g.seats.forEach((s) => box(s[0] - 9, s[1] - 9, s[0] + 9, s[1] + 9, 0, SEAT, '#6b7280', { noShadow: true }));
   });
+  for (let i = 0; i < 3; i++) L.obstacles.push({ x0: X + 47 + i * 50, y0: Y + 52, x1: X + 95 + i * 50, y1: Y + 80 }); // sofa cushions
+  g.seats.forEach((s) => L.obstacles.push({ x0: s[0] - 9, y0: s[1] - 9, x1: s[0] + 9, y1: s[1] + 9 }));
   addBoxItem(L, X + 46, Y + 40, X + 196, Y + 52, 0, 34, '#d9776a');
   addBoxItem(L, X + 38, Y + 40, X + 46, Y + 80, 0, 22, '#c26a5a');
   addBoxItem(L, X + 196, Y + 40, X + 204, Y + 80, 0, 22, '#c26a5a');
@@ -341,6 +356,7 @@ function addDesk(L, p) {
   const k = p.k, id = p.id, ox = p.x, oy = p.y;
   const X = (d) => ox + (CX + d) * k, Y = (v) => oy + v * k; // d = offset from the desk centre
   const chairOf = () => { const a = agents.get(id); return a ? a.chair : 0; };
+  L.obstacles.push({ x0: X(-18), y0: Y(62), x1: X(18), y1: Y(96), owner: id }); // the chair (the owner's own chair is free for the owner)
   L.ground.push(() => flat(X(-70), Y(20), X(70), Y(CH - 10), 0.3, 'rgba(255,255,255,0.28)'));
   L.ground.push(() => {
     const c = chairOf(), dx = 9 * k * c, dy = 16 * k * c;

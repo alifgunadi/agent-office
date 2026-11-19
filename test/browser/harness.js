@@ -105,6 +105,13 @@ async function launch() {
       await send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, text, windowsVirtualKeyCode: { ArrowRight: 39, ArrowLeft: 37, Home: 36, End: 35, Tab: 9, Enter: 13 }[key] || 0 });
       await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code });
     },
+    // Mouse in client (window) coordinates.
+    async move(x, y) { await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y }); },
+    async click(x, y) {
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+    },
     async screenshot(file) {
       const s = await send('Page.captureScreenshot', { format: 'png' });
       fs.writeFileSync(file, Buffer.from(s.data, 'base64'));
