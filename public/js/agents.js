@@ -182,12 +182,12 @@ function updateAgents(dt, now, big) {
     if (a.st) {
       const q = samplePath(a.st.pts, a.st.cum, a.st.p);
       a.x = q.x; a.y = q.y;
-      const du = q.dx * P.c - q.dy * P.s;
+      const du = screenDu(q.dx, q.dy);
       if (Math.abs(du) > 0.01) a.flip = du < 0;
     } else if (a.route && a.s > 0) {
       const q = samplePath(a.route, a.cum, Math.min(a.s, a.total));
       a.x = q.x; a.y = q.y;
-      const du = (q.dx * P.c - q.dy * P.s) * a.lastDir;
+      const du = screenDu(q.dx, q.dy) * a.lastDir;
       if (Math.abs(du) > 0.01) a.flip = du < 0;
     } else {
       a.x = p.x + CX * p.k; a.y = p.y + 78 * p.k;
@@ -216,7 +216,8 @@ function computeChat(t) {
     const sp = occ[turn % occ.length];
     const laugh = ((t / 1000 + gi * 3.3) % 9) < 1.1;
     const dirTo = (a, b) => {
-      const du = (b.x * P.c - b.y * P.s) - (a.x * P.c - a.y * P.s);
+      const va = viewXY(a.x, a.y), vb = viewXY(b.x, b.y);
+      const du = (vb[0] * P.c - vb[1] * P.s) - (va[0] * P.c - va[1] * P.s);
       return du > 1 ? 1 : du < -1 ? -1 : 0;
     };
     const icons = CHAT_ICONS[gi];

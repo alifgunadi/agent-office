@@ -16,6 +16,7 @@ const LEAVE_GRACE_MS = IDLE_TO_LOUNGE_MIN * 60 * 1000, STAGGER_STEP = 150, STAGG
 // then stacked rooms with 3 or 2 desk columns. The Penpot design shows the isometric view on a 1440px screen, where the stage
 // is about 1070px wide, so the old 1100 threshold (which showed stacked rooms there) was lowered.
 const WIDE_MIN_W = 880, STACK3_MIN_W = 700;
+const MAX_CANVAS_PIXELS = 16e6;          // backing store limit: at 130% zoom and a high-dpi screen the canvas would otherwise be huge
 const TOP_PAD = 56;                      // css px above the floor for bubbles
 const LBL = 46;                          // floor strip at the front of each room reserved for the room name
 const FLOOR_UPRIGHT = 0.5;               // 0 = floor lettering fully on the floor plane, 1 = no shear (more legible)
@@ -37,7 +38,11 @@ let booted = false;
 const agents = new Map(); // desk id -> animation state
 let slotOwner = [];
 // Projection: wide layout is isometric (2:1), stacked layouts use a tilted oblique view.
-const P = { c: 1, s: 1, K: 0.75, tilt: 0.5, zk: 0.85, cs: 1, ox: 0, oy: 0 };
+// rot is the camera turn in quarter turns (0-3) around the middle of the floor; ra..rf is that turn as an affine map
+// (x', y') = (ra*x + rb*y + re, rc*x + rd*y + rf), see setView() in projection.js.
+const P = { c: 1, s: 1, K: 0.75, tilt: 0.5, zk: 0.85, cs: 1, ox: 0, oy: 0, rot: 0, ra: 1, rb: 0, rc: 0, rd: 1, re: 0, rf: 0 };
+// What the user picked with the camera controls. rot only applies to the wide layout (see setProj).
+const camera = { rot: 0, zoom: 1, walls: 'cut' };
 
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 

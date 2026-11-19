@@ -17,7 +17,8 @@ const { launch } = require('./harness');
         if (filter && !filter.test(c.name)) continue;
         const before = page.problems.length;
         try {
-          await page.viewport(1440, 900); // every case starts from the same window
+          await page.viewport(1440, 900); // every case starts from the same window and the default camera
+          await page.evaluate("typeof resetCamera === 'function' && (resetCamera(), setMinimized(false), true)");
           await c.run(page);
           const fresh = page.problems.slice(before);
           if (fresh.length) throw new Error('page problems: ' + fresh.join(' | '));

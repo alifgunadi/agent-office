@@ -29,6 +29,41 @@
         <div class="stage" tabindex="0"><canvas id="office" role="img"
             aria-label="Office floorplan with agent desks and their status"></canvas></div>
         <ul class="legend" id="legend" aria-label="Office zones"></ul>
+        <section class="camera-card" id="camera" role="group" aria-label="Kamera">
+          <div class="camera-head">
+            <svg class="camera-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+            <span class="camera-title">KAMERA</span>
+            <output id="camera-readout" aria-live="polite">0° · 100%</output>
+            <button class="icon-btn icon-btn--sm" id="camera-min" type="button" aria-expanded="true" aria-controls="camera-body" aria-label="Minimalkan kamera"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          </div>
+          <div id="camera-body">
+            <div class="camera-row">
+              <button class="icon-btn icon-btn--lg" id="cam-left" type="button" aria-label="Putar kiri"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <div class="compass" aria-hidden="true">
+                <svg id="camera-compass" viewBox="0 0 56 56"><path d="M28 10l6 16h-12z" fill="#d23c3c"/><path d="M28 46l-6-16h12z" fill="#9ca3af"/></svg>
+              </div>
+              <button class="icon-btn icon-btn--lg" id="cam-right" type="button" aria-label="Putar kanan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+            <div class="camera-row">
+              <button class="icon-btn" id="cam-zoom-out" type="button" aria-label="Perkecil"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <input type="range" id="cam-zoom" min="0" max="2" step="1" value="1" aria-label="Zoom" aria-valuetext="100%">
+              <button class="icon-btn" id="cam-zoom-in" type="button" aria-label="Perbesar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+            <div>
+              <div class="camera-label" id="camera-walls-label">Dinding</div>
+              <div class="tabs" id="camera-walls" role="radiogroup" aria-labelledby="camera-walls-label">
+                <button class="tab" type="button" role="radio" aria-checked="false" data-walls="up" tabindex="-1">Naik</button>
+                <button class="tab" type="button" role="radio" aria-checked="true" data-walls="cut">Potong</button>
+                <button class="tab" type="button" role="radio" aria-checked="false" data-walls="down" tabindex="-1">Turun</button>
+              </div>
+            </div>
+            <p class="camera-hint">Q/E putar · +/− zoom · 0 reset</p>
+          </div>
+        </section>
+        <div class="minimap-card" hidden>
+          <div class="camera-head"><span>PETA</span><span>Geser untuk pan</span></div>
+          <canvas id="minimap" role="img" aria-label="Peta kantor: tarik untuk menggeser tampilan"></canvas>
+        </div>
         <div class="me-card" id="me-card">
           <div class="avatar" aria-hidden="true">A</div>
           <div class="who">
@@ -76,6 +111,7 @@
   <script src="/js/log.js"></script>
   <script src="/js/a11y.js"></script>
   <script src="/js/chrome.js"></script>
+  <script src="/js/camera.js"></script>
   <script src="/js/net.js"></script>
 </body>
 

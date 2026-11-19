@@ -271,6 +271,145 @@ canvas {
   color: var(--color-muted);
 }
 
+/* ---------- camera card and minimap (overlays on the stage) ---------- */
+
+.camera-card {
+  position: absolute;
+  top: var(--space-3);
+  right: calc(var(--space-4) + 17px); /* clear of the stage's scrollbar */
+  width: 216px;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-paper);
+  border-radius: var(--radius-16);
+  box-shadow: var(--shadow-float);
+}
+
+.camera-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-11);
+  line-height: var(--lh-14);
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+.camera-head output {
+  margin-left: auto;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.camera-card.is-min {
+  width: auto;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border-radius: var(--radius-pill);
+}
+
+.camera-card.is-min .camera-head {
+  letter-spacing: 0;
+}
+
+.camera-card.is-min .camera-title {
+  display: none;
+}
+
+.camera-card .camera-icon {
+  display: none;
+  width: 16px;
+  height: 16px;
+}
+
+.camera-card.is-min .camera-icon {
+  display: block;
+}
+
+#camera-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.camera-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.compass {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border: 2px solid var(--color-ink);
+  border-radius: 50%;
+}
+
+.compass svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.camera-row input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  height: var(--ctl-24);
+  accent-color: var(--color-focus);
+}
+
+.camera-label {
+  font-size: var(--fs-11);
+  line-height: var(--lh-14);
+  font-weight: 800;
+  margin-bottom: var(--space-1);
+}
+
+#camera-walls .tab {
+  font-size: var(--fs-12);
+}
+
+.camera-hint {
+  margin: 0;
+  font-size: var(--fs-11);
+  line-height: var(--lh-14);
+  color: var(--color-muted);
+}
+
+.minimap-card {
+  position: absolute;
+  right: calc(var(--space-4) + 17px);
+  bottom: calc(var(--space-4) + 17px);
+  padding: var(--space-3);
+  background: var(--color-paper);
+  border-radius: var(--radius-12);
+  box-shadow: var(--shadow-float);
+}
+
+.minimap-card .camera-head {
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.minimap-card .camera-head span:last-child {
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--color-muted);
+}
+
+#minimap {
+  display: block;
+  cursor: pointer;
+  touch-action: none;
+  background: var(--color-wash);
+  border-radius: var(--radius-8);
+}
+
 /* ---------- side panel ---------- */
 
 aside {
@@ -388,7 +527,9 @@ aside {
   }
 
   .me-card,
-  .legend {
+  .legend,
+  .camera-card,
+  .minimap-card {
     display: none;
   }
 

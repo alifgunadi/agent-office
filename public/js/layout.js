@@ -68,6 +68,17 @@ function loungeGeom(z, stacked) {
 }
 
 // Floor lettering: the room name lies on the floor, using the floor's own affine basis.
+// Door gaps of the wall that faces the viewer at the front of a room, as intervals along the view's x axis.
+function frontGaps(z) {
+  const side = ['bottom', 'top', 'left', 'right'].find((s) => wallRole(s) === 'S');
+  const alongX = side === 'top' || side === 'bottom';
+  const at = side === 'top' ? z.y : side === 'bottom' ? z.y + z.h : side === 'left' ? z.x : z.x + z.w;
+  return gapsFor(z, side).map((g) => {
+    const a = alongX ? viewXY(g[0], at)[0] : viewXY(at, g[0])[0], b = alongX ? viewXY(g[1], at)[0] : viewXY(at, g[1])[0];
+    return [Math.min(a, b), Math.max(a, b)];
+  });
+}
+
 function drawFloorLabel(z) {
   const T = z.glass ? T_GLASS : T_WALL;
   const ax = P.c * P.K, ay = P.s * P.K * P.tilt;
@@ -77,18 +88,19 @@ function drawFloorLabel(z) {
   let fs = 20;
   ctx.font = '800 ' + fs + 'px ' + FONT;
   let tw = ctx.measureText(z.label).width;
-  const avail = z.w - 2 * T - 28;
+  const vr = viewRect(z.x, z.y, z.x + z.w, z.y + z.h); // the room as the camera sees it (the same rectangle at camera turn 0)
+  const avail = (vr[2] - vr[0]) - 2 * T - 28;
   if (tw + 24 > avail) { fs = Math.max(14, fs * avail / (tw + 24)); ctx.font = '800 ' + fs + 'px ' + FONT; tw = ctx.measureText(z.label).width; }
   const w = tw + 24;
-  const gaps = gapsFor(z, 'bottom');
+  const gaps = frontGaps(z);
   const clash = (x0) => gaps.some((g) => x0 < g[1] + 10 && x0 + w > g[0] - 10);
-  let x = z.x + T + 12;
+  let x = vr[0] + T + 12;
   if (clash(x)) {
-    const cands = gaps.map((g) => g[1] + 10).concat([z.x + z.w - T - 12 - w]);
-    x = cands.find((c) => c + w <= z.x + z.w - T - 8 && !clash(c)) ?? x;
+    const cands = gaps.map((g) => g[1] + 10).concat([vr[2] - T - 12 - w]);
+    x = cands.find((c) => c + w <= vr[2] - T - 8 && !clash(c)) ?? x;
   }
-  const y = z.y + z.h - T - 1 - ph * vs;
-  const o = pj(x, y, 0.5);
+  const y = vr[3] - T - 1 - ph * vs;
+  const o = projectView(x, y, 0.5);
   ctx.save();
   ctx.transform(ax, ay, bxv * vs, byv * vs, o[0], o[1]);
   rr(0, 0, w, ph, 8, 'rgba(255,255,255,0.6)');
@@ -101,7 +113,7 @@ function drawFloorLabel(z) {
     const note = 'No visitors right now';
     ctx.font = '700 17px ' + FONT;
     const nw = ctx.measureText(note).width;
-    if (x + w + 14 + nw < z.x + z.w - T - 8) {
+    if (x + w + 14 + nw < vr[2] - T - 8) {
       ctx.fillStyle = '#4b5563';
       ctx.fillText(note, w + 14, ph / 2 + 1);
     }
@@ -114,7 +126,7 @@ function buildLayout(list, cols) {
   const stacked = cols > 0;
   const groups = { trainer: [], product: [], eng: [], qa: [], guest: [] };
   list.forEach((d, index) => { groups[ZONE_OF[d.id] || 'guest'].push({ id: d.id, index }); });
-  const L = { cols, zones: [], places: [], byId: new Map(), floors: [], ground: [], items: [], ver: ++layoutVer };
+  const L = { cols, zones: [], places: [], byId: new Map(), floors: [], ground: [], items: [], tags: [], ver: ++layoutVer };
   const zone = (key, x, y, w, h, row) => {
     const z = Object.assign({ key, x, y, w, h, row }, ZONES[key]);
     z.hN = z.glass ? WG : (row === 0 ? WH : WL);
@@ -167,12 +179,15 @@ function buildLayout(list, cols) {
     H = y;
   }
   L.W = W; L.H = H;
+  setView(P.rot, W / 2, H / 2); // the camera turns around the middle of the floor
+  L.rot = P.rot; L.walls = camera.walls;
   const lz = L.zones.find((z) => z.key === 'lounge');
   L.lounge = loungeGeom(lz, stacked);
 
   // base slab (corridor) and zone floors
   L.floors.push(() => {
-    flat(18, 18, W + 18, H + 18, -9, 'rgba(31,42,55,0.10)');
+    const so = shadowOffset(18);
+    flat(so[0], so[1], W + so[0], H + so[1], -9, 'rgba(31,42,55,0.10)');
     box(0, 0, W, H, -9, -2, CORRIDOR, { noShadow: true });
   });
   for (const z of L.zones) {
@@ -213,11 +228,29 @@ function buildLayout(list, cols) {
 function addWalls(L, z) {
   const g = !!z.glass, T = g ? T_GLASS : T_WALL, col = g ? '#8fcbe6' : z.wall;
   const o = g ? { glass: true, noShadow: true } : {};
-  const hN = z.hN, hW = g ? WG : WH, hF = g ? WG : WF;
-  runs(z.x + T, z.x + z.w, gapsFor(z, 'top')).forEach(([a, b]) => addBoxItem(L, a, z.y, b, z.y + T, 0, hN, col, o));
-  runs(z.y, z.y + z.h, gapsFor(z, 'left')).forEach(([a, b]) => addBoxItem(L, z.x, a, z.x + T, b, 0, hW, col, o));
-  runs(z.x + T, z.x + z.w, gapsFor(z, 'bottom')).forEach(([a, b]) => addBoxItem(L, a, z.y + z.h - T, b, z.y + z.h, 0, hF, col, o));
-  runs(z.y + T, z.y + z.h - T, gapsFor(z, 'right')).forEach(([a, b]) => addBoxItem(L, z.x + z.w - T, a, z.x + z.w, b, 0, hF, col, o));
+  runs(z.x + T, z.x + z.w, gapsFor(z, 'top')).forEach(([a, b]) => addBoxItem(L, a, z.y, b, z.y + T, 0, wallHeight(z, 'top'), col, o));
+  runs(z.y, z.y + z.h, gapsFor(z, 'left')).forEach(([a, b]) => addBoxItem(L, z.x, a, z.x + T, b, 0, wallHeight(z, 'left'), col, o));
+  runs(z.x + T, z.x + z.w, gapsFor(z, 'bottom')).forEach(([a, b]) => addBoxItem(L, a, z.y + z.h - T, b, z.y + z.h, 0, wallHeight(z, 'bottom'), col, o));
+  runs(z.y + T, z.y + z.h - T, gapsFor(z, 'right')).forEach(([a, b]) => addBoxItem(L, z.x + z.w - T, a, z.x + z.w, b, 0, wallHeight(z, 'right'), col, o));
+}
+
+// The four walls of a room, by the direction they face in the world.
+const WALL_NORMAL = { top: [0, -1], left: [-1, 0], bottom: [0, 1], right: [1, 0] };
+// Which way a wall faces in the view: 'N' and 'W' are the back walls (tall), 'S' and 'E' the front ones (low), seen from the camera.
+function wallRole(side) {
+  const n = WALL_NORMAL[side], v = viewDir(n[0], n[1]);
+  return v[1] < 0 ? 'N' : v[1] > 0 ? 'S' : v[0] < 0 ? 'W' : 'E';
+}
+// Wall height by mode: 'up' = every wall full height, 'cut' = the two back walls tall and the front ones low (a cutaway), 'down' = only a low edge.
+function wallHeight(z, side) {
+  const g = !!z.glass;
+  if (camera.walls === 'down') return WF;
+  if (camera.walls === 'up') return g ? WG : WH;
+  switch (wallRole(side)) {
+    case 'N': return z.hN;
+    case 'W': return g ? WG : WH;
+    default: return g ? WG : WF;
+  }
 }
 
 function drawPlant(x, y, r) {
@@ -318,6 +351,32 @@ function addDesk(L, p) {
     const c = chairOf(), dx = 9 * k * c, dy = 16 * k * c;
     box(X(-20) + dx, Y(56) + dy, X(20) + dx, Y(62) + dy, 8, 36, '#4b5563', { noShadow: true });
   });
+  // The owner's name: flat on the front panel (vertical plane, so the text stays upright) or, when that panel faces away, a pill
+  // on screen. Dimmed when the owner is away from the desk.
+  const nameplate = (onPanel) => {
+    const a = agents.get(id), away = !!a && a.s > 0.5;
+    const role = roleOf(id), text = plaqueText(id, role.label);
+    let fs = 18;
+    ctx.font = '800 ' + fs + 'px ' + FONT;
+    let tw = ctx.measureText(text).width;
+    if (tw > 124) { fs = Math.max(13, fs * 124 / tw); ctx.font = '800 ' + fs + 'px ' + FONT; tw = ctx.measureText(text).width; }
+    const pw = Math.min(146, tw + 26), ph = 25;
+    const o = onPanel ? pj(X(0) - pw * k / 2, Y(124) + 0.2, 29) : pj(X(0), Y(112), 0);
+    ctx.save();
+    if (onPanel) ctx.transform(P.c * P.K * k, P.s * P.K * P.tilt * k, 0, P.zk * k, o[0], o[1]);
+    else { ctx.translate(o[0] - pw * k / 2, o[1] + 6 * k); ctx.scale(k, k); }
+    ctx.globalAlpha = away ? 0.6 : 1;
+    rr(0, 0, pw, ph, 6, '#ffffff');
+    rr(0, 0, pw, ph, 6);
+    ctx.lineWidth = 1.5; ctx.strokeStyle = '#5b3b22'; ctx.stroke();
+    rr(2, 2, 7, ph - 4, 3, away ? '#9ca3af' : role.color);
+    ctx.fillStyle = '#0f172a';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.font = '800 ' + fs + 'px ' + FONT;
+    ctx.fillText(text, 14, ph / 2 + 1);
+    ctx.restore();
+  };
   // desk: legs, full-width front panel carrying the name plaque, top, monitor (back faces the viewer), mug, papers
   addItem(L, X(-75), Y(100), X(75), Y(124), () => {
     const a = agents.get(id), away = !!a && a.s > 0.5;
@@ -337,26 +396,10 @@ function addDesk(L, p) {
       vface(Y(110), X(-24), X(24), 41, 44.5, '#e5e7eb');
       vface(Y(110), X(-24), X(-24) + Math.max(4, 48 * hp) * k, 41, 44.5, STATUS_COLOR[st] || STATUS_COLOR.idle);
     }
-    // name plaque on the front panel (vertical plane, so the text stays upright; dimmed when the owner is away)
-    const role = roleOf(id), text = plaqueText(id, role.label);
-    let fs = 18;
-    ctx.font = '800 ' + fs + 'px ' + FONT;
-    let tw = ctx.measureText(text).width;
-    if (tw > 124) { fs = Math.max(13, fs * 124 / tw); ctx.font = '800 ' + fs + 'px ' + FONT; tw = ctx.measureText(text).width; }
-    const pw = Math.min(146, tw + 26), ph = 25;
-    const o = pj(X(0) - pw * k / 2, Y(124) + 0.2, 29);
-    ctx.save();
-    ctx.transform(P.c * P.K * k, P.s * P.K * P.tilt * k, 0, P.zk * k, o[0], o[1]);
-    ctx.globalAlpha = away ? 0.6 : 1;
-    rr(0, 0, pw, ph, 6, '#ffffff');
-    rr(0, 0, pw, ph, 6);
-    ctx.lineWidth = 1.5; ctx.strokeStyle = '#5b3b22'; ctx.stroke();
-    rr(2, 2, 7, ph - 4, 3, away ? '#9ca3af' : role.color);
-    ctx.fillStyle = '#0f172a';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.font = '800 ' + fs + 'px ' + FONT;
-    ctx.fillText(text, 14, ph / 2 + 1);
-    ctx.restore();
+    // At camera turn 0 the name plaque lies on the front panel of the desk (see nameplate).
+    if (P.rot === 0) nameplate(true);
   });
+  // At the other camera turns that panel faces away from the viewer (hidden or mirrored), so the name goes on a pill under the
+  // desk instead, drawn after everything else so no desk covers it.
+  if (P.rot !== 0) L.tags.push(() => nameplate(false));
 }

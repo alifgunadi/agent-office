@@ -146,7 +146,8 @@
   cursor: pointer;
 }
 
-.tab[aria-selected="true"] {
+.tab[aria-selected="true"],
+.tab[aria-checked="true"] {
   color: var(--color-ink);
   font-weight: 800;
   background: var(--color-paper);
@@ -154,7 +155,8 @@
 }
 
 /* a marker that does not depend on colour: a bar under the selected tab */
-.tab[aria-selected="true"]::after {
+.tab[aria-selected="true"]::after,
+.tab[aria-checked="true"]::after {
   content: "";
   position: absolute;
   left: var(--space-3);
@@ -165,10 +167,61 @@
   background: var(--color-ink);
 }
 
-.tab:focus-visible[aria-selected="true"] {
+.tab[aria-disabled="true"] {
+  color: var(--color-disabled-fg);
+  cursor: default;
+  opacity: .6;
+}
+
+.tab:focus-visible[aria-selected="true"],
+.tab:focus-visible[aria-checked="true"] {
   box-shadow: var(--shadow-card), 0 0 0 2px var(--color-paper);
 }
 
 @media (pointer: coarse), (any-pointer: coarse) {
   .tab { height: var(--ctl-44); }
+}
+
+/* ---------- Icon button (round, 24-44px) ---------- */
+
+.icon-btn {
+  --size: var(--ctl-40);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--size);
+  height: var(--size);
+  padding: 0;
+  color: var(--color-ink);
+  background: var(--color-paper);
+  border: 1px solid var(--color-control-border);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.icon-btn--lg { --size: var(--ctl-44); }
+.icon-btn--sm { --size: var(--ctl-28); border-radius: var(--radius-8); }
+
+.icon-btn svg {
+  width: 20px;
+  height: 20px;
+  pointer-events: none;
+}
+
+.icon-btn:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--color-wash);
+}
+
+.icon-btn:disabled,
+.icon-btn[aria-disabled="true"] {
+  color: var(--color-disabled-fg);
+  background: var(--color-disabled-bg);
+  border-color: var(--color-disabled-bg);
+  cursor: default;
+}
+
+@media (pointer: coarse), (any-pointer: coarse) {
+  .icon-btn,
+  .icon-btn--sm { --size: var(--ctl-44); }
 }

@@ -9,6 +9,11 @@ const lastStatus = new Map();
 let announceQueue = [], announceTimer = 0, firstState = true;
 const ANNOUNCE_MS = 2500;
 
+// Say something once, now (camera changes, and anything else that is not a status change).
+function announce(text) {
+  announceEl.textContent = text;
+}
+
 function agentText(d) {
   const a = agents.get(d.id);
   return roleOf(d.id).label + ': ' + (d.status || 'unknown') + (a && a.loc !== 'at desk' ? ', ' + a.loc : '') + (d.activity ? ' - ' + d.activity : '');

@@ -11,10 +11,15 @@ function drawAgent(a, p) {
   if (atDesk) {
     pose = 'sit'; z = SEAT; flip = false;
     if (st === 'working') anim = 'type';
+    if (P.rot !== 0) { const f = facingOf(0, 1); face = f.face; side = f.side; flip = f.flip; } // the desk's owner faces the desk (+y)
   } else if (inLounge) {
     pose = slot.z > 0 ? 'sit' : 'stand'; z = slot.z; face = slot.face; flip = false;
     anim = slot.anim === 'chat' ? (ch && ch.speak ? 'chat' : null) : slot.anim;
     if (slot.side) { side = true; flip = slot.flipFace; }
+    if (P.rot !== 0) {
+      const f = slot.side ? facingOf(slot.flipFace ? -1 : 1, 0) : facingOf(0, slot.face === 'back' ? -1 : 1);
+      face = f.face; side = f.side; flip = f.flip;
+    }
   } else if (a.st) {
     const from = g.slots[a.slot].z, to = g.slots[a.st.to].z;
     z = Math.max(from * Math.max(0, 1 - a.st.p / 14), to * Math.max(0, 1 - (a.st.len - a.st.p) / 14));
@@ -29,6 +34,14 @@ function drawAgent(a, p) {
     status: st, sleepy: atDesk && st === 'idle',
     speak: !!(ch && ch.speak), look: ch ? ch.look : 0, laugh: !!(ch && ch.laugh), nod: !!(ch && ch.nod),
   }, a);
+}
+
+// Which way a character looks on screen when it faces a world direction: toward the viewer, away, or sideways (flip = left).
+function facingOf(fx, fy) {
+  const g = viewDir(fx, fy);
+  if (g[1] > 0) return { face: 'front', side: false, flip: false };
+  if (g[1] < 0) return { face: 'back', side: false, flip: false };
+  return { face: 'front', side: true, flip: g[0] < 0 };
 }
 
 function safe(fn) {
@@ -141,28 +154,34 @@ function render(t) {
   if (availW == null) measureStage();
   // wide isometric floorplan when there is room, otherwise stacked zones with 3 or 2 desk columns
   const cols = availW >= WIDE_MIN_W ? 0 : availW >= STACK3_MIN_W ? 3 : 2;
-  if (layoutDirty || !layout || layout.cols !== cols) {
+  if (layoutDirty || !layout || layout.cols !== cols || layout.rot !== (cols === 0 ? camera.rot : 0) || layout.walls !== camera.walls) {
     layout = buildLayout(desks, cols);
     layoutDirty = false;
+    cameraLayoutChanged(); // the controls depend on the layout mode
   }
   const sw = layout.sceneW;
   let cssW;
   if (cols) {
-    cssW = Math.round(Math.max(sw, Math.min(availW, sw * 1.6)));
+    cssW = Math.round(Math.max(sw, Math.min(availW, sw * 1.6)) * camera.zoom);
   } else {
     // wide: fit the projected bounding box into the stage (width and height) so nothing scrolls
     const byW = availW / sw;
     const byH = availH > TOP_PAD + 200 ? (availH - TOP_PAD) / layout.sceneH : Infinity;
-    cssW = Math.round(sw * Math.max(0.5, Math.min(byW, byH, 1.35)));
+    cssW = Math.round(sw * Math.max(0.5, Math.min(byW, byH, 1.35)) * camera.zoom); // zoom is a multiple of the fit-to-window size
   }
   if (cssW <= 0) return;
   sc = cssW / sw;
   const cssH = Math.round(layout.sceneH * sc + TOP_PAD);
   dpr = Math.max(1, window.devicePixelRatio || 1);
+  if (cssW * cssH * dpr * dpr > MAX_CANVAS_PIXELS) dpr = Math.max(1, Math.sqrt(MAX_CANVAS_PIXELS / (cssW * cssH)));
   const pw = Math.round(cssW * dpr), ph = Math.round(cssH * dpr);
   if (canvas.width !== pw || canvas.height !== ph) { canvas.width = pw; canvas.height = ph; }
   const key = cssW + 'x' + cssH;
-  if (key !== sizedKey) { canvas.style.width = cssW + 'px'; canvas.style.height = cssH + 'px'; sizedKey = key; }
+  if (key !== sizedKey) {
+    canvas.style.width = cssW + 'px'; canvas.style.height = cssH + 'px'; sizedKey = key;
+    restoreCenter(); // keep the middle of what the user was looking at after a turn or zoom
+    drawMinimap();
+  }
   P.ox = layout.ox;
   P.oy = layout.oy + TOP_PAD / sc;
 
@@ -187,12 +206,14 @@ function render(t) {
     const p = layout.byId.get(a.id);
     if (!p) continue;
     const f = pjr(a.x, a.y, 0), ck = p.k * P.cs;
+    const vc = viewXY(a.x, a.y), vr = viewRect(a.x - 8, a.y - 5, a.x + 8, a.y + 5);
     list.push({
-      x0: a.x - 8, x1: a.x + 8, y0: a.y - 5, y1: a.y + 5, k: P.s > 0 ? a.x + a.y : a.y,
+      x0: vr[0], x1: vr[2], y0: vr[1], y1: vr[3], k: P.s > 0 ? vc[0] + vc[1] : vc[1],
       sb: [f[0] - 22 * ck, f[1] - 70 * ck - 12, f[0] + 22 * ck, f[1] + 10], draw: () => drawAgent(a, p),
     });
   }
   for (const it of depthSort(list)) safe(it.draw);
+  for (const f of layout.tags) safe(f); // desk name pills (camera turns other than 0)
   drawOverlays(cssW);
 }
 
