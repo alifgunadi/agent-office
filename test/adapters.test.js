@@ -128,6 +128,9 @@ describe('OpenCode adapter', () => {
     return capture.received;
   };
 
+  // The adapter posts without waiting, so arrival order is not guaranteed: look events up by content.
+  const named = (bodies, name) => bodies.find((b) => b.hook_event_name === name || b.tool_name === name);
+
   it('exposes the plugin shape OpenCode loads', () => {
     assert.equal(plugin.id, 'agent-office');
     assert.equal(typeof plugin.setup, 'function');
@@ -144,8 +147,9 @@ describe('OpenCode adapter', () => {
     events.push({ type: 'permission.asked', data: { sessionID: 'ses_1' } });
     const got = await lastSent(before + 2);
     const mine = got.slice(before).map((r) => r.body);
-    assert.deepEqual(mine[0], { v: 1, source: 'opencode', hook_event_name: 'SessionStart', session_id: 'ses_1' });
-    assert.deepEqual([mine[1].hook_event_name, mine[1].notification_type], ['Notification', 'permission_prompt']);
+    assert.deepEqual(named(mine, 'SessionStart'), { v: 1, source: 'opencode', hook_event_name: 'SessionStart', session_id: 'ses_1' });
+    const note = named(mine, 'Notification');
+    assert.deepEqual([note.hook_event_name, note.notification_type], ['Notification', 'permission_prompt']);
   });
 
   it('sends the guard header', async () => {
@@ -158,9 +162,9 @@ describe('OpenCode adapter', () => {
     toolHooks['execute.before']({ sessionID: 'ses_1', tool: 'bash', input: { command: 'KEY=secret npm run build --token=zzz' } });
     toolHooks['execute.before']({ sessionID: 'ses_1', tool: 'grep', input: { pattern: 'p'.repeat(100) } });
     const mine = (await lastSent(before + 3)).slice(before).map((r) => r.body);
-    assert.equal(mine[0].tool_input.file_path, 'a.ts');
-    assert.equal(mine[1].tool_input.command, 'npm');
-    assert.equal(mine[2].tool_input.pattern.length, 40);
+    assert.equal(named(mine, 'read').tool_input.file_path, 'a.ts');
+    assert.equal(named(mine, 'bash').tool_input.command, 'npm');
+    assert.equal(named(mine, 'grep').tool_input.pattern.length, 40);
     assert.ok(!JSON.stringify(mine).includes('secret') && !JSON.stringify(mine).includes('zzz'));
   });
 
@@ -169,7 +173,8 @@ describe('OpenCode adapter', () => {
     toolHooks['execute.before']({ sessionID: 'ses_1', tool: 'task', input: { subagent_type: 'engineering/lead-dba' } });
     toolHooks['execute.after']({ sessionID: 'ses_1', tool: 'task' });
     const mine = (await lastSent(before + 2)).slice(before).map((r) => r.body);
-    assert.deepEqual(mine.map((e) => [e.hook_event_name, e.agent_type]), [['SubagentStart', 'lead-dba'], ['SubagentStop', 'lead-dba']]);
-    assert.equal(mine[0].agent_id, mine[1].agent_id);
+    const start = named(mine, 'SubagentStart'), stop = named(mine, 'SubagentStop');
+    assert.deepEqual([start.agent_type, stop.agent_type], ['lead-dba', 'lead-dba']);
+    assert.equal(start.agent_id, stop.agent_id);
   });
 });
