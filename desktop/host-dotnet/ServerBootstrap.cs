@@ -68,6 +68,8 @@ internal static class ServerBootstrap
         }
     }
 
+    public static bool NodeAvailable() => FindNode() is not null;
+
     private static string? FindNode()
     {
         string? path = Environment.GetEnvironmentVariable("PATH");

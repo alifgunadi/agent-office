@@ -11,6 +11,7 @@ const { createOffice } = require('./lib/office');
 const { sanitizeEvent } = require('./lib/sanitize');
 const { STOPPED_MARKER, LOG_PATH } = require('./lib/paths');
 const { rotateIfLarge } = require('./lib/logfile');
+const { pageCsp, applyBaseHeaders } = require('./lib/security');
 
 const LISTEN_RETRIES = 10;
 const LISTEN_RETRY_MS = 200;
@@ -128,6 +129,9 @@ function isTrustedRequest(req) {
 }
 
 const indexPath = path.join(__dirname, 'index.html');
+// Only these files are ever served from fonts/ (no path from the request is used).
+const FONTS = { '/fonts/nunito-latin.woff2': 'nunito-latin.woff2', '/fonts/nunito-latin-ext.woff2': 'nunito-latin-ext.woff2' };
+const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
 function route(req, res) {
   if (!isTrustedRequest(req)) return res.writeHead(403).end();
@@ -135,7 +139,19 @@ function route(req, res) {
   if (req.method === 'GET' && req.url === '/') {
     fs.readFile(indexPath, (err, html) => {
       if (err) return res.writeHead(500).end('index.html not found');
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }).end(html);
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'Content-Security-Policy': pageCsp(html),
+      }).end(html);
+    });
+    return;
+  }
+
+  if (req.method === 'GET' && hasOwn(FONTS, req.url)) {
+    fs.readFile(path.join(__dirname, 'fonts', FONTS[req.url]), (err, data) => {
+      if (err) return res.writeHead(404).end();
+      res.writeHead(200, { 'Content-Type': 'font/woff2', 'Cache-Control': 'public, max-age=31536000, immutable' }).end(data);
     });
     return;
   }
@@ -214,6 +230,7 @@ function route(req, res) {
 const server = http.createServer((req, res) => {
   // A bug while handling one request must never take the whole server down.
   try {
+    applyBaseHeaders(res);
     route(req, res);
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Request failed:`, err);

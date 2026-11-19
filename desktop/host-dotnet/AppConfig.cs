@@ -4,9 +4,10 @@ namespace AgentOffice.Desktop;
 internal sealed record AppConfig(string Root, int Port)
 {
     private const int DefaultPort = 4317;
-    private const string FallbackRoot = @"C:\projects\agent-office";
 
     public Uri Origin => new($"http://127.0.0.1:{Port}/");
+
+    public bool HasServerScript => File.Exists(EnsureServerScript);
 
     public string EnsureServerScript => Path.Combine(Root, "ensure-server.js");
 
@@ -29,7 +30,8 @@ internal sealed record AppConfig(string Root, int Port)
         {
             if (IsRepoRoot(dir.FullName)) return dir.FullName;
         }
-        return FallbackRoot;
+        // Not found: keep the exe folder. MainForm tells the user that server.js is missing and how to point at the repo.
+        return AppContext.BaseDirectory;
     }
 
     private static bool IsRepoRoot(string dir) =>

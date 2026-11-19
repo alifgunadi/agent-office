@@ -39,7 +39,8 @@ Event flow: agent tool hook -> `hook.js` (stdin JSON -> slimmed payload) -> `POS
 
 ## Gotchas
 
-- `hooks-settings-snippet.json`, [README.md](README.md) and the integrations hardcode `C:/projects/agent-office/`.
+- The hooks template and adapters carry no fixed repo path: `node install.js` fills in this checkout's path (the desktop host finds the repo from its exe location or `AGENT_OFFICE_ROOT`).
+- Security headers and the page CSP come from `lib/security.js` (script/style hashes are computed from `index.html`, so no `unsafe-inline`). The page must not load anything from another origin; the Nunito font is served from `fonts/` by an allowlist in `server.js`. See [SECURITY.md](SECURITY.md).
 - `desktop/host-dotnet/bin`, `obj`, `desktop/app` and `desktop/tools/out` are build output: ignored and no longer tracked (CI fails if they are tracked again). The e2e tests need `desktop/app` built locally first.
 - Stop marker and log live in `AGENT_OFFICE_DATA_DIR` (default: the OS temp dir); see `lib/paths.js`. Tests set it so they never touch a real office.
 - `project/` is gitignored and holds private project materials: `project/docs/` and `project/research/desktop-app/` (design docs for the desktop app, not runtime code). Never commit or reference its contents in tracked files.

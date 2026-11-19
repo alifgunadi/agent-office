@@ -59,7 +59,11 @@ internal sealed class MainForm : Form
             await InitializeWebViewAsync();
             bool up = await ServerBootstrap.EnsureAsync(_config, StartupWait, _closing.Token);
             if (up) ShowPage();
-            else EnterOffline("server did not answer after start");
+            else
+            {
+                EnterOffline("server did not answer after start");
+                ExplainStartupFailure();
+            }
         }
         catch (OperationCanceledException)
         {
@@ -80,7 +84,21 @@ internal sealed class MainForm : Form
         string userData = Path.Combine(WindowSettings.DataDir, "WebView2");
         // Extra browser flags can still be passed with WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS (used by the tests).
         var options = new CoreWebView2EnvironmentOptions();
-        var env = await CoreWebView2Environment.CreateAsync(browserExecutableFolder: null, userData, options);
+        CoreWebView2Environment env;
+        try
+        {
+            env = await CoreWebView2Environment.CreateAsync(browserExecutableFolder: null, userData, options);
+        }
+        catch (WebView2RuntimeNotFoundException)
+        {
+            MessageBox.Show(this,
+                "The Microsoft Edge WebView2 Runtime is not installed.\n\nInstall the Evergreen runtime from https://developer.microsoft.com/microsoft-edge/webview2/ and start Agent Office again.",
+                "Agent Office", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Close();
+            throw new OperationCanceledException();
+        }
+        // The runtime updates itself; a new version is used the next time the app starts.
+        env.NewBrowserVersionAvailable += (_, _) => Log.Info("A newer WebView2 runtime is installed; it is used after restarting Agent Office.");
         await _webView.EnsureCoreWebView2Async(env);
 
         var core = _webView.CoreWebView2;
@@ -98,7 +116,9 @@ internal sealed class MainForm : Form
         s.IsSwipeNavigationEnabled = false;
         s.IsZoomControlEnabled = true;           // Same as a browser tab (Ctrl+wheel, Ctrl +/-).
         s.AreBrowserAcceleratorKeysEnabled = true; // F5 / Ctrl+R reload must keep working.
-        s.AreDefaultScriptDialogsEnabled = true;
+        s.AreDefaultScriptDialogsEnabled = false; // the page never uses alert/confirm/prompt
+        s.AreHostObjectsAllowed = false;          // no host object bridge into the page
+        s.IsWebMessageEnabled = false;            // the page never talks to the host
 
         core.DocumentTitleChanged += (_, _) =>
         {
@@ -106,8 +126,22 @@ internal sealed class MainForm : Form
         };
         core.NavigationStarting += OnNavigationStarting;
         core.NavigationCompleted += OnNavigationCompleted;
+        core.FrameNavigationStarting += OnNavigationStarting;
         core.NewWindowRequested += (_, a) => a.Handled = true;
+        core.PermissionRequested += (_, a) => a.State = CoreWebView2PermissionState.Deny;
+        core.DownloadStarting += (_, a) => { a.Cancel = true; a.Handled = true; };
         core.ProcessFailed += OnProcessFailed;
+    }
+
+    /// <summary>Server did not come up: say why when the cause is on this machine (no repo, no Node).</summary>
+    private void ExplainStartupFailure()
+    {
+        string? message = null;
+        if (!_config.HasServerScript)
+            message = $"ensure-server.js was not found in {_config.Root}.\n\nSet the AGENT_OFFICE_ROOT environment variable to the Agent Office folder (the one that contains server.js).";
+        else if (!ServerBootstrap.NodeAvailable())
+            message = "Node.js was not found on PATH, so the Agent Office server cannot start.\n\nInstall Node.js 22 or newer from https://nodejs.org/ and start Agent Office again.";
+        if (message is not null) MessageBox.Show(this, message, "Agent Office", MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
 
     private void ShowPage()

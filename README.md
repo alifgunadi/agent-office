@@ -7,7 +7,8 @@ characters type, wait, or sleep based on hook events.
 - `server.js`  - local server (127.0.0.1:4317), no dependencies. Runs with `node` or `bun`.
 - `lib/`       - the office model (`office.js`), input cleaning (`sanitize.js`), shared paths and log rotation, and the installer logic.
 - `hook.js`    - Claude Code hook. Forwards a minimal event to the server. Always exits 0, prints nothing.
-- `index.html` - the office page.
+- `index.html` - the office page. `fonts/` holds the bundled Nunito font (SIL OFL), so the page loads nothing from other sites.
+- `SECURITY.md` - what the server protects against, what it does not, and how to report a problem.
 - `ensure-server.js` - starts the server in the background if it is not running (silent, idempotent).
 - `install.js` - connects this checkout to Claude Code, Antigravity and OpenCode (see below).
 - `hooks-settings-snippet.json` - hooks template used by `install.js` (`__AGENT_OFFICE_ROOT__` is replaced by this checkout's path).
