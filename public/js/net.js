@@ -92,6 +92,7 @@ function applyPending() {
     syncAgents(desks);
     syncAgentList(desks);
     queueAnnouncements(desks);
+    updateChrome(desks);
     if (!desks.length) { ariaKey = ''; canvas.setAttribute('aria-label', 'Office floorplan. No agents yet.'); }
     dirty = true;
   } catch (err) {

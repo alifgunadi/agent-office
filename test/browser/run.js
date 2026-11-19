@@ -1,0 +1,37 @@
+'use strict';
+// Runs every test/browser/*.browser.js in one Edge session: node test/browser/run.js [name filter]
+// Each file exports an array of { name, run(page) } cases; a case throws to fail.
+
+const fs = require('node:fs');
+const path = require('node:path');
+const { launch } = require('./harness');
+
+(async () => {
+  const filter = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;
+  const files = fs.readdirSync(__dirname).filter((f) => f.endsWith('.browser.js')).sort();
+  const page = await launch();
+  let failed = 0, passed = 0;
+  try {
+    for (const file of files) {
+      for (const c of require(path.join(__dirname, file))) {
+        if (filter && !filter.test(c.name)) continue;
+        const before = page.problems.length;
+        try {
+          await page.viewport(1440, 900); // every case starts from the same window
+          await c.run(page);
+          const fresh = page.problems.slice(before);
+          if (fresh.length) throw new Error('page problems: ' + fresh.join(' | '));
+          passed++;
+          console.log('PASS  ' + c.name);
+        } catch (err) {
+          failed++;
+          console.log('FAIL  ' + c.name + '  -  ' + err.message);
+        }
+      }
+    }
+  } finally {
+    await page.close();
+  }
+  console.log(`\n${passed} passed, ${failed} failed`);
+  process.exit(failed ? 1 : 0);
+})().catch((err) => { console.error(err); process.exit(1); });

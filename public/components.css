@@ -1,0 +1,174 @@
+/* Components of the Penpot UI kit: Button, Badge, Filter chip, segmented Tabs, and the focus ring.
+   Sizes come from tokens.css. Nothing here uses inline styles, so the CSP (style-src 'self') allows it. */
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--color-paper);
+}
+
+/* ---------- Button ---------- */
+
+.btn {
+  --btn-h: var(--ctl-32);
+  --btn-px: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--btn-h);
+  padding: 0 var(--btn-px);
+  font: 700 var(--fs-12) / var(--lh-16) var(--font);
+  color: var(--color-ink);
+  background: var(--color-paper);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-8);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn--sm { --btn-h: var(--ctl-28); --btn-px: 10px; font-size: var(--fs-11); line-height: var(--lh-14); }
+.btn--lg { --btn-h: var(--ctl-36); }
+.btn--touch { --btn-h: var(--ctl-44); font-size: var(--fs-13); }
+
+@media (pointer: coarse), (any-pointer: coarse) {
+  .btn { --btn-h: var(--ctl-44); }
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--color-wash);
+}
+
+.btn--primary {
+  color: var(--color-primary-fg);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: #111827;
+}
+
+.btn--danger {
+  color: var(--color-primary-fg);
+  background: var(--color-danger-fg);
+  border-color: var(--color-danger-fg);
+}
+
+.btn--danger-soft {
+  color: var(--color-danger-fg);
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger-border);
+}
+
+.btn--danger-soft:hover:not(:disabled) {
+  background: #fbdada;
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  color: var(--color-disabled-fg);
+  background: var(--color-disabled-bg);
+  border-color: var(--color-disabled-bg);
+  cursor: default;
+}
+
+/* ---------- Badge (status label, 20px) ---------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: var(--ctl-20);
+  padding: 0 var(--space-2);
+  font: 700 var(--fs-11) / var(--lh-14) var(--font);
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  color: var(--color-queued-fg);
+  background: var(--color-queued-bg);
+}
+
+.badge--running { color: var(--color-running-fg); background: var(--color-running-bg); }
+.badge--queued { color: var(--color-queued-fg); background: var(--color-queued-bg); }
+.badge--waiting { color: var(--color-waiting-fg); background: var(--color-waiting-bg); }
+.badge--done { color: var(--color-done-fg); background: var(--color-done-bg); }
+.badge--failed { color: var(--color-danger-fg); background: var(--color-danger-bg); }
+.badge--count { color: var(--color-waiting-solid-fg); background: var(--color-waiting-solid); min-width: var(--ctl-20); justify-content: center; }
+
+/* ---------- Filter chip (32px pill) ---------- */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  height: var(--ctl-32);
+  padding: 0 var(--space-3);
+  font: 700 var(--fs-12) / var(--lh-16) var(--font);
+  color: var(--color-ink);
+  background: var(--color-paper);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chip[aria-pressed="true"] {
+  color: var(--color-primary-fg);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+@media (pointer: coarse), (any-pointer: coarse) {
+  .chip { height: var(--ctl-44); }
+}
+
+/* ---------- Segmented tabs ---------- */
+
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--color-wash);
+  border-radius: var(--radius-12);
+}
+
+.tab {
+  position: relative;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--ctl-32);
+  font: 700 var(--fs-13) / var(--lh-16) var(--font);
+  color: var(--color-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-8);
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] {
+  color: var(--color-ink);
+  font-weight: 800;
+  background: var(--color-paper);
+  box-shadow: var(--shadow-card);
+}
+
+/* a marker that does not depend on colour: a bar under the selected tab */
+.tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  bottom: 3px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--color-ink);
+}
+
+.tab:focus-visible[aria-selected="true"] {
+  box-shadow: var(--shadow-card), 0 0 0 2px var(--color-paper);
+}
+
+@media (pointer: coarse), (any-pointer: coarse) {
+  .tab { height: var(--ctl-44); }
+}

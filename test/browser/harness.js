@@ -1,0 +1,123 @@
+'use strict';
+// Browser test harness: an isolated server (free port, temp data dir) and a visible Edge window driven over the
+// DevTools protocol. Used by test/browser/run.js; needs Microsoft Edge (preinstalled on Windows, also on GitHub's
+// windows runners) and Node 22+ (global WebSocket).
+
+const { spawn } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const net = require('node:net');
+
+const ROOT = path.join(__dirname, '..', '..');
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function findEdge() {
+  const candidates = [
+    process.env.EDGE_PATH,
+    path.join(process.env['ProgramFiles(x86)'] || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    path.join(process.env.ProgramFiles || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+  ].filter(Boolean);
+  const found = candidates.find((p) => fs.existsSync(p));
+  if (!found) throw new Error('Microsoft Edge not found (set EDGE_PATH)');
+  return found;
+}
+
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.on('error', reject);
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+  });
+}
+
+async function launch() {
+  const port = await freePort();
+  const debugPort = await freePort();
+  const origin = `http://127.0.0.1:${port}`;
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-browser-'));
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-browser-profile-'));
+  const server = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
+    env: { ...process.env, AGENT_OFFICE_PORT: String(port), AGENT_OFFICE_DATA_DIR: dataDir, AGENT_OFFICE_AUTO_STOP: '0' },
+    stdio: 'ignore',
+  });
+  for (let i = 0; i < 60; i++) {
+    try { if ((await fetch(origin + '/state')).ok) break; } catch { /* not up yet */ }
+    await sleep(100);
+  }
+  const edge = spawn(findEdge(), [`--app=${origin}/`, `--user-data-dir=${profile}`, `--remote-debugging-port=${debugPort}`,
+    '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--window-size=1700,1000'], { stdio: 'ignore' });
+
+  let target;
+  for (let i = 0; i < 150 && !target; i++) {
+    try {
+      const list = await (await fetch(`http://127.0.0.1:${debugPort}/json/list`)).json();
+      target = list.find((t) => t.type === 'page' && t.url.startsWith(origin));
+    } catch { /* not up yet */ }
+    if (!target) await sleep(200);
+  }
+  if (!target) throw new Error('Edge did not open the page');
+
+  const ws = new WebSocket(target.webSocketDebuggerUrl);
+  await new Promise((resolve, reject) => { ws.addEventListener('open', resolve); ws.addEventListener('error', reject); });
+  let nextId = 0;
+  const pending = new Map();
+  const problems = []; // uncaught exceptions, console errors and CSP violations
+  ws.addEventListener('message', (m) => {
+    const d = JSON.parse(m.data);
+    if (d.id && pending.has(d.id)) { pending.get(d.id)(d.result || d); pending.delete(d.id); }
+    if (d.method === 'Runtime.exceptionThrown') problems.push('exception: ' + ((d.params.exceptionDetails.exception || {}).description || d.params.exceptionDetails.text));
+    if (d.method === 'Log.entryAdded' && d.params.entry.level === 'error') problems.push('log: ' + d.params.entry.text);
+  });
+  const send = (method, params = {}) => new Promise((resolve) => { const id = ++nextId; pending.set(id, resolve); ws.send(JSON.stringify({ id, method, params })); });
+  const evaluate = async (expression) => {
+    const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+    if (r.exceptionDetails) throw new Error('page error: ' + ((r.exceptionDetails.exception || {}).description || r.exceptionDetails.text));
+    return r.result && r.result.value;
+  };
+  await send('Runtime.enable');
+  await send('Log.enable');
+  await send('Emulation.setFocusEmulationEnabled', { enabled: true }); // keep the page "focused" even if the window is behind
+
+  const api = {
+    origin, send, evaluate, problems,
+    sleep,
+    // A test that provokes a page problem on purpose (a CSP violation, say) removes it so the runner does not fail it.
+    expectProblems(pattern) {
+      for (let i = problems.length - 1; i >= 0; i--) if (pattern.test(problems[i])) problems.splice(i, 1);
+    },
+    post: (body) => fetch(origin + '/event', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Agent-Office': '1' }, body: JSON.stringify(body) }),
+    async waitFor(expression, ms = 8000) {
+      const end = Date.now() + ms;
+      while (Date.now() < end) { if (await evaluate(expression)) return true; await sleep(100); }
+      throw new Error('timed out waiting for: ' + expression);
+    },
+    async viewport(width, height, { touch = false, reducedMotion = false } = {}) {
+      await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+      await send('Emulation.setTouchEmulationEnabled', { enabled: touch });
+      await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: reducedMotion ? 'reduce' : 'no-preference' }] });
+      await sleep(900);
+    },
+    async key(key, { code = key, text } = {}) {
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, text, windowsVirtualKeyCode: { ArrowRight: 39, ArrowLeft: 37, Home: 36, End: 35, Tab: 9, Enter: 13 }[key] || 0 });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code });
+    },
+    async screenshot(file) {
+      const s = await send('Page.captureScreenshot', { format: 'png' });
+      fs.writeFileSync(file, Buffer.from(s.data, 'base64'));
+    },
+    async close() {
+      try { ws.close(); } catch { /* closing anyway */ }
+      try { edge.kill(); } catch { /* already gone */ }
+      try { server.kill(); } catch { /* already gone */ }
+      await sleep(400);
+    },
+  };
+  await api.waitFor(`document.getElementById('conn') && document.getElementById('conn').textContent === 'live'`, 15000);
+  return api;
+}
+
+module.exports = { launch, sleep };

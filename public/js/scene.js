@@ -140,7 +140,7 @@ let sizedKey = '';
 function render(t) {
   if (availW == null) measureStage();
   // wide isometric floorplan when there is room, otherwise stacked zones with 3 or 2 desk columns
-  const cols = availW >= 1100 ? 0 : availW >= 700 ? 3 : 2;
+  const cols = availW >= WIDE_MIN_W ? 0 : availW >= STACK3_MIN_W ? 3 : 2;
   if (layoutDirty || !layout || layout.cols !== cols) {
     layout = buildLayout(desks, cols);
     layoutDirty = false;

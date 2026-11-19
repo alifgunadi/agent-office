@@ -9,8 +9,8 @@ namespace AgentOffice.Desktop;
 /// </summary>
 internal sealed class MainForm : Form
 {
-    // Matches --bg1 in public/app.css so there is no white flash before the page paints.
-    private static readonly Color PageBackground = Color.FromArgb(0xdf, 0xf3, 0xea);
+    // Matches --color-stage in public/tokens.css so there is no white flash before the page paints.
+    private static readonly Color PageBackground = Color.FromArgb(0xdc, 0xe2, 0xeb);
     private static readonly Size DefaultClientSizeLogical = new(1600, 900);
     private static readonly TimeSpan StartupWait = TimeSpan.FromSeconds(8);
     private static readonly TimeSpan OfflineRetry = TimeSpan.FromSeconds(2);
@@ -158,7 +158,7 @@ internal sealed class MainForm : Form
         _showingPage = false;
         _webView.CoreWebView2?.NavigateToString(
             "<!doctype html><html><head><title>Agent Office</title></head>" +
-            "<body style=\"margin:0;background:linear-gradient(135deg,#dff3ea,#cfe6f7);height:100vh\"></body></html>");
+            "<body style=\"margin:0;background:#dce2eb;height:100vh\"></body></html>");
         _offlineTimer.Start();
     }
 
