@@ -22,15 +22,39 @@ process.stdin.on('data', (chunk) => {
 process.stdin.on('end', forward);
 process.stdin.on('error', () => process.exit(0));
 
+// A hook must never surface an error to the host agent, whatever the payload looks like.
+process.on('uncaughtException', () => process.exit(0));
+
+function str(value, max) {
+  return typeof value === 'string' ? value.slice(0, max) : undefined;
+}
+
+// Only the file name is forwarded, never the directory (paths can reveal user names and project layout).
+function fileName(value) {
+  const name = str(value, 1000);
+  return name ? name.split(/[\\/]/).pop().slice(0, 100) : undefined;
+}
+
+// Only the program name is forwarded: leading VAR=value assignments (often secrets) are skipped,
+// and so are the directories in front of the program and every argument.
+function programName(command) {
+  const tokens = command.trim().split(/\s+/);
+  while (tokens.length > 1 && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[0])) tokens.shift();
+  const first = tokens[0];
+  if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(first)) return 'env';
+  return first.split(/[\\/]/).pop().slice(0, 40);
+}
+
 function slimToolInput(input) {
   if (!input || typeof input !== 'object') return undefined;
   const slim = {};
-  const file = input.file_path || input.path || input.notebook_path;
-  if (file) slim.file_path = String(file).slice(0, 300);
-  // ponytail: Only the first token of a shell command is forwarded, to avoid leaking secrets passed as arguments.
-  if (typeof input.command === 'string') slim.command = input.command.trim().split(/\s+/)[0].slice(0, 40);
-  if (typeof input.pattern === 'string') slim.pattern = input.pattern.slice(0, 40);
-  if (typeof input.subagent_type === 'string') slim.subagent_type = input.subagent_type.slice(0, 80);
+  const file = fileName(input.file_path || input.path || input.notebook_path);
+  if (file) slim.file_path = file;
+  if (typeof input.command === 'string' && input.command.trim()) slim.command = programName(input.command);
+  const pattern = str(input.pattern, 40);
+  if (pattern) slim.pattern = pattern;
+  const subagent = str(input.subagent_type, 80);
+  if (subagent) slim.subagent_type = subagent;
   return slim;
 }
 
@@ -41,15 +65,17 @@ function forward() {
   } catch {
     process.exit(0);
   }
+  // JSON "null", arrays and scalars are valid JSON but not hook payloads.
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) process.exit(0);
 
   const event = {
-    hook_event_name: payload.hook_event_name,
-    session_id: payload.session_id,
-    agent_id: payload.agent_id,
-    agent_type: payload.agent_type,
-    teammate_name: payload.teammate_name,
-    tool_name: payload.tool_name,
-    notification_type: payload.notification_type,
+    hook_event_name: str(payload.hook_event_name, 64),
+    session_id: str(payload.session_id, 128),
+    agent_id: str(payload.agent_id, 128),
+    agent_type: str(payload.agent_type, 64),
+    teammate_name: str(payload.teammate_name, 64),
+    tool_name: str(payload.tool_name, 128),
+    notification_type: str(payload.notification_type, 64),
     tool_input: slimToolInput(payload.tool_input),
   };
   const body = JSON.stringify(event);

@@ -50,10 +50,27 @@ function startServer() {
   process.exit(0);
 }
 
+// Another service on the port must not count as a running office: check the /state shape.
+// Older office versions have no "app" marker, so a desks+log pair is accepted too.
+function isOffice(body) {
+  try {
+    const json = JSON.parse(body);
+    return Boolean(json) && (json.app === 'agent-office' || (Boolean(json.desks) && Array.isArray(json.log)));
+  } catch {
+    return false;
+  }
+}
+
 const probe = http.get({ host: '127.0.0.1', port: PORT, path: '/state', timeout: PROBE_TIMEOUT_MS }, (res) => {
-  res.resume();
-  if (res.statusCode === 200) process.exit(0);
-  else startServer();
+  let body = '';
+  res.setEncoding('utf8');
+  res.on('data', (chunk) => {
+    if (body.length < 1024 * 1024) body += chunk;
+  });
+  res.on('end', () => {
+    if (res.statusCode === 200 && isOffice(body)) process.exit(0);
+    else startServer();
+  });
 });
 probe.on('timeout', () => probe.destroy());
 probe.on('error', startServer);

@@ -8,7 +8,7 @@ Agent Office as its own Windows app: one window, no browser tabs, same pixels as
 
 ## Install
 
-Requires the .NET 9 SDK (build), .NET 9 Desktop Runtime, Node, and the WebView2 Runtime (preinstalled on Windows 11).
+Requires the .NET 10 SDK (build), .NET 10 Desktop Runtime, Node, and the WebView2 Runtime (preinstalled on Windows 11).
 
 ```powershell
 cd C:\projects\agent-office
