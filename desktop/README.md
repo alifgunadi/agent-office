@@ -3,7 +3,7 @@
 Agent Office as its own Windows app: one window, no browser tabs, same pixels as the browser page.
 
 `AgentOffice.exe` is a thin C# WinForms + WebView2 host. It runs the existing `ensure-server.js`, then opens
-`http://127.0.0.1:4317/` in a WebView2 window. `server.js`, `index.html`, `hook.js`, and every hook config
+`http://127.0.0.1:4317/` in a WebView2 window. `server.js`, `public/`, `hook.js`, and every hook config
 (Claude Code, Antigravity, OpenCode) are unchanged, so all integrations keep working.
 
 ## Install

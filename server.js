@@ -128,7 +128,12 @@ function isTrustedRequest(req) {
   return true;
 }
 
-const indexPath = path.join(__dirname, 'index.html');
+// The page lives in public/: index.html, app.css and classic scripts in public/js. Only file names that match
+// STATIC_PATH are ever read (no path from the request is joined to the disk path beyond that pattern).
+const publicDir = path.join(__dirname, 'public');
+const STATIC_PATH = /^\/(?:[a-z0-9-]+\.(?:css|js)|js\/[a-z0-9-]+\.js)$/;
+const STATIC_TYPES = { '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8' };
+const indexPath = path.join(publicDir, 'index.html');
 // Only these files are ever served from fonts/ (no path from the request is used).
 const FONTS = { '/fonts/nunito-latin.woff2': 'nunito-latin.woff2', '/fonts/nunito-latin-ext.woff2': 'nunito-latin-ext.woff2' };
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -138,12 +143,20 @@ function route(req, res) {
 
   if (req.method === 'GET' && req.url === '/') {
     fs.readFile(indexPath, (err, html) => {
-      if (err) return res.writeHead(500).end('index.html not found');
+      if (err) return res.writeHead(500).end('public/index.html not found');
       res.writeHead(200, {
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-store',
-        'Content-Security-Policy': pageCsp(html),
+        'Content-Security-Policy': pageCsp(),
       }).end(html);
+    });
+    return;
+  }
+
+  if (req.method === 'GET' && STATIC_PATH.test(req.url)) {
+    fs.readFile(path.join(publicDir, req.url.slice(1)), (err, data) => {
+      if (err) return res.writeHead(404).end();
+      res.writeHead(200, { 'Content-Type': STATIC_TYPES[path.extname(req.url)], 'Cache-Control': 'no-store' }).end(data);
     });
     return;
   }

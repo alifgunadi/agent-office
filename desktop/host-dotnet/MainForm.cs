@@ -9,7 +9,7 @@ namespace AgentOffice.Desktop;
 /// </summary>
 internal sealed class MainForm : Form
 {
-    // Matches --bg1 in index.html so there is no white flash before the page paints.
+    // Matches --bg1 in public/app.css so there is no white flash before the page paints.
     private static readonly Color PageBackground = Color.FromArgb(0xdf, 0xf3, 0xea);
     private static readonly Size DefaultClientSizeLogical = new(1600, 900);
     private static readonly TimeSpan StartupWait = TimeSpan.FromSeconds(8);
