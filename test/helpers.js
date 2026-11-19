@@ -1,0 +1,76 @@
+'use strict';
+// Shared helpers: throwaway server instances on a free port with an isolated data dir,
+// so tests never touch a running office on 4317 or the real stop marker and log.
+
+const { spawn } = require('node:child_process');
+const fs = require('node:fs');
+const http = require('node:http');
+const net = require('node:net');
+const os = require('node:os');
+const path = require('node:path');
+
+const ROOT = path.join(__dirname, '..');
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.on('error', reject);
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+  });
+}
+
+function request(port, method, urlPath, { body, headers = {} } = {}) {
+  return new Promise((resolve) => {
+    const data = body === undefined ? undefined : Buffer.from(typeof body === 'string' ? body : JSON.stringify(body));
+    const h = { ...(data ? { 'Content-Type': 'application/json', 'Content-Length': data.length } : {}), ...headers };
+    const req = http.request({ host: '127.0.0.1', port, method, path: urlPath, headers: h, timeout: 3000, agent: false }, (res) => {
+      let text = '';
+      res.on('data', (chunk) => (text += chunk));
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, text }));
+    });
+    req.on('error', (err) => resolve({ error: err.code || err.message }));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ error: 'timeout' });
+    });
+    req.end(data);
+  });
+}
+
+async function startServer(extraEnv = {}) {
+  const port = await freePort();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-test-'));
+  const child = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
+    cwd: ROOT,
+    env: { ...process.env, AGENT_OFFICE_PORT: String(port), AGENT_OFFICE_DATA_DIR: dataDir, AGENT_OFFICE_AUTO_STOP: '0', ...extraEnv },
+    stdio: 'ignore',
+    windowsHide: true,
+  });
+  const exit = { code: undefined };
+  child.on('exit', (code) => (exit.code = code));
+  for (let i = 0; i < 50; i++) {
+    const res = await request(port, 'GET', '/state');
+    if (res.status === 200) break;
+    await sleep(100);
+  }
+  const header = { 'X-Agent-Office': '1' };
+  return {
+    port,
+    dataDir,
+    exit,
+    request: (method, urlPath, opts) => request(port, method, urlPath, opts),
+    event: (body) => request(port, 'POST', '/event', { body, headers: header }),
+    state: async () => JSON.parse((await request(port, 'GET', '/state')).text),
+    async stop() {
+      child.kill();
+      await new Promise((resolve) => (child.exitCode !== null ? resolve() : child.once('exit', resolve)));
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    },
+  };
+}
+
+module.exports = { ROOT, sleep, freePort, request, startServer };

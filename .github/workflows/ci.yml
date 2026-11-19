@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: node ${{ matrix.node }}
+    runs-on: windows-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24, 26]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+      - run: node --version
+      - run: npm test
+      - if: matrix.node == 24
+        run: npm run test:coverage
+
+  # Guards the repo hygiene rule: build output must never be tracked.
+  tracked-build-output:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: No tracked build output
+        run: |
+          bad=$(git ls-files | grep -E '^desktop/(app|host-dotnet/(bin|obj)|tools/out)/' || true)
+          if [ -n "$bad" ]; then
+            echo "Build output is tracked:" && echo "$bad" && exit 1
+          fi

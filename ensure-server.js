@@ -5,7 +5,6 @@
 
 const http = require('node:http');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
@@ -13,13 +12,13 @@ const PORT = Number(process.env.AGENT_OFFICE_PORT) || 4317;
 const PROBE_TIMEOUT_MS = 500;
 const HARD_EXIT_MS = 3000;
 const SERVER_PATH = path.join(__dirname, 'server.js');
-const LOG_PATH = path.join(os.tmpdir(), 'agent-office.log');
+const { STOPPED_MARKER, LOG_PATH } = require('./lib/paths');
 
 setTimeout(() => process.exit(0), HARD_EXIT_MS).unref();
 
 // An explicit start clears a previous manual Stop from the UI.
 try {
-  fs.unlinkSync(path.join(os.tmpdir(), 'agent-office.stopped'));
+  fs.unlinkSync(STOPPED_MARKER);
 } catch {
   // Marker absent.
 }

@@ -1,0 +1,23 @@
+name: Desktop e2e
+
+# Runs the 14 desktop tests against the real exe. This needs an interactive Windows desktop with
+# WebView2 and Edge, so it runs on a self-hosted runner. The repository is public: this workflow is
+# manual only (never on pull requests), so code from a fork cannot reach the runner.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: [self-hosted, windows]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: dotnet publish desktop\host-dotnet -c Release -o desktop\app
+      - run: node desktop\tools\test-desktop.js
+        env:
+          TEST_PORT: '4399'

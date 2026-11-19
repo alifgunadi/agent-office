@@ -8,7 +8,7 @@ Agent Office: a live pixel-art office that visualizes Claude Code, Antigravity a
 
 ## Commands
 
-No build step, no dependencies, no lint, and no unit tests for the Node side. Needs Node (also runs under Bun).
+No build step, no runtime dependencies, no lint. Needs Node 22+ (also runs under Bun). The Node side is covered by `npm test` (`node --test`, no install needed).
 
 ```powershell
 node server.js                         # run server on 127.0.0.1:4317 (AGENT_OFFICE_PORT to change)
@@ -17,6 +17,7 @@ powershell -File start-office.ps1      # start + open browser; stop-office.ps1 t
 
 # Desktop app (C# WinForms + WebView2, .NET 10)
 dotnet publish desktop\host-dotnet -c Release -o desktop\app
+npm test                               # unit + black-box tests (free port, isolated data dir via AGENT_OFFICE_DATA_DIR)
 node desktop\tools\test-desktop.js     # 14 e2e tests against real exe, isolated server on port 4399 (Node 22+)
 ```
 
@@ -26,7 +27,8 @@ Server logs: `%TEMP%\agent-office.log`; desktop host log: `%TEMP%\agent-office-d
 
 Event flow: agent tool hook -> `hook.js` (stdin JSON -> slimmed payload) -> `POST /event` on [server.js](server.js) -> in-memory `state` -> SSE `GET /events` -> [index.html](index.html) draws on a `<canvas>`.
 
-- **server.js** is a dependency-free `http` server holding all state in memory (`state.desks`, `state.log`, `sessions`, `activeSubagents`). Endpoints: `/` (serves index.html), `/events` (SSE), `/state`, `POST /event`, `POST /control/stop|restart`. Mutating POSTs require the `X-Agent-Office: 1` header (blocks cross-site browser requests); server binds to 127.0.0.1 only. Every route also rejects a foreign `Host` (DNS rebinding), a foreign `Origin` and `Sec-Fetch-Site: cross-site` with 403. `/event` bodies go through `sanitizeEvent` (known fields only, type-checked, length-capped), and guest desks (12), SSE clients (16) and tracked ids (256) are capped. `/state` and SSE carry `app: "agent-office"` and `schema: 1`; `ensure-server.js` uses that to tell the office from another service on the port.
+- **lib/office.js** is the office model (desks, log, session tracking, the hook-event state machine) with no HTTP or process code, so tests drive it directly. `lib/sanitize.js` cleans untrusted payloads, `lib/paths.js` holds the shared marker/log paths. A `SessionEnd` only resets desks the ending session wrote to while other sessions are live; with none left (or no session id) it resets everything.
+- **server.js** is the dependency-free `http` and process-lifecycle layer around it; all state is in memory. Endpoints: `/` (serves index.html), `/events` (SSE), `/state`, `POST /event`, `POST /control/stop|restart`. Mutating POSTs require the `X-Agent-Office: 1` header (blocks cross-site browser requests); server binds to 127.0.0.1 only. Every route also rejects a foreign `Host` (DNS rebinding), a foreign `Origin` and `Sec-Fetch-Site: cross-site` with 403. `/event` bodies go through `sanitizeEvent` (known fields only, type-checked, length-capped), and guest desks (12), SSE clients (16) and tracked ids (256) are capped. `/state` and SSE carry `app: "agent-office"` and `schema: 1`; `ensure-server.js` uses that to tell the office from another service on the port.
 - **Desk mapping**: `ROLE_IDS` in server.js must match the agent `name` frontmatter in `~/.claude/agents/*.md`. Unknown agent types get an auto-created "guest" desk. Tool events go to the subagent desk if `agent_id`/`agent_type` is present, else `main`. Nested ids (`engineering/lead-dba`) are flattened to the basename.
 - **Lifecycle**: auto-stops 30 s after the last `SessionEnd` (cancelled by any new event); sessions silent for 6 h are pruned. Manual Stop writes `%TEMP%\agent-office.stopped`, which stops `hook.js` from reviving the server until `ensure-server.js` clears it (new session / start script). Restart spawns a detached new instance that retries `listen` until the port frees.
 - **index.html** is a single 1900-line file (inline CSS + JS, canvas rendering, pointer/a11y handling, reduced-motion path). No bundler or modules.
@@ -37,5 +39,6 @@ Event flow: agent tool hook -> `hook.js` (stdin JSON -> slimmed payload) -> `POS
 ## Gotchas
 
 - `hooks-settings-snippet.json`, [README.md](README.md) and the integrations hardcode `C:/projects/agent-office/`.
-- `desktop/host-dotnet/bin`, `obj` and `desktop/app` are listed in `desktop/.gitignore` but are currently tracked in git; avoid committing rebuilt binaries unintentionally.
+- `desktop/host-dotnet/bin`, `obj`, `desktop/app` and `desktop/tools/out` are build output: ignored and no longer tracked (CI fails if they are tracked again). The e2e tests need `desktop/app` built locally first.
+- Stop marker and log live in `AGENT_OFFICE_DATA_DIR` (default: the OS temp dir); see `lib/paths.js`. Tests set it so they never touch a real office.
 - `project/` is gitignored and holds private project materials: `project/docs/` and `project/research/desktop-app/` (design docs for the desktop app, not runtime code). Never commit or reference its contents in tracked files.
