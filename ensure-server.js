@@ -13,6 +13,7 @@ const PROBE_TIMEOUT_MS = 500;
 const HARD_EXIT_MS = 3000;
 const SERVER_PATH = path.join(__dirname, 'server.js');
 const { STOPPED_MARKER, LOG_PATH } = require('./lib/paths');
+const { rotateIfLarge } = require('./lib/logfile');
 
 setTimeout(() => process.exit(0), HARD_EXIT_MS).unref();
 
@@ -29,6 +30,7 @@ process.stdin.resume();
 
 function startServer() {
   let out = 'ignore';
+  rotateIfLarge(LOG_PATH);
   try {
     out = fs.openSync(LOG_PATH, 'a');
   } catch {

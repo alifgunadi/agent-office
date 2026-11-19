@@ -69,6 +69,8 @@ function forward() {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) process.exit(0);
 
   const event = {
+    v: 1,
+    source: 'claude-code',
     hook_event_name: str(payload.hook_event_name, 64),
     session_id: str(payload.session_id, 128),
     agent_id: str(payload.agent_id, 128),

@@ -13,7 +13,7 @@ describe('sanitizeEvent', () => {
   it('keeps only known fields', () => {
     const evt = sanitizeEvent({ hook_event_name: 'PreToolUse', prompt: 'SECRET', transcript_path: 'C:/x', tool_response: 'big' });
     assert.deepEqual(Object.keys(evt).sort(), [
-      'agent_id', 'agent_type', 'hook_event_name', 'notification_type', 'session_id', 'teammate_name', 'tool_input', 'tool_name',
+      'agent_id', 'agent_type', 'hook_event_name', 'notification_type', 'session_id', 'source', 'teammate_name', 'tool_input', 'tool_name', 'v',
     ]);
     assert.ok(!JSON.stringify(evt).includes('SECRET'));
   });
@@ -52,6 +52,26 @@ describe('sanitizeEvent', () => {
 
   it('ignores array tool_input', () => {
     assert.equal(sanitizeEvent({ hook_event_name: 'e', tool_input: [1] }).tool_input, undefined);
+  });
+});
+
+describe('envelope v1', () => {
+  it('treats events without an envelope as claude-code v1', () => {
+    const evt = sanitizeEvent({ hook_event_name: 'Stop' });
+    assert.equal(evt.v, 1);
+    assert.equal(evt.source, 'claude-code');
+  });
+
+  it('keeps a valid source and version', () => {
+    const evt = sanitizeEvent({ hook_event_name: 'Stop', v: 2, source: 'opencode' });
+    assert.equal(evt.v, 2);
+    assert.equal(evt.source, 'opencode');
+  });
+
+  it('falls back on invalid envelope values', () => {
+    for (const v of ['1', 0, -1, 1.5, 1000, null, {}]) assert.equal(sanitizeEvent({ hook_event_name: 'Stop', v }).v, 1);
+    for (const source of [5, '', '__proto__', {}, '<>']) assert.equal(sanitizeEvent({ hook_event_name: 'Stop', source }).source, 'claude-code');
+    assert.equal(sanitizeEvent({ hook_event_name: 'Stop', source: 'x'.repeat(100) }).source.length, 32);
   });
 });
 

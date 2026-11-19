@@ -10,6 +10,7 @@ const { spawn } = require('node:child_process');
 const { createOffice } = require('./lib/office');
 const { sanitizeEvent } = require('./lib/sanitize');
 const { STOPPED_MARKER, LOG_PATH } = require('./lib/paths');
+const { rotateIfLarge } = require('./lib/logfile');
 
 const LISTEN_RETRIES = 10;
 const LISTEN_RETRY_MS = 200;
@@ -21,6 +22,8 @@ const KEEPALIVE_MS = 15000;
 const MAX_SSE_CLIENTS = 16;
 // Auto stop: shut down after the last Claude Code session ends. Set AGENT_OFFICE_AUTO_STOP=0 to disable.
 const AUTO_STOP = process.env.AGENT_OFFICE_AUTO_STOP !== '0';
+// AGENT_OFFICE_DEBUG=1 logs one line per event (names and ids only, never tool input).
+const DEBUG = process.env.AGENT_OFFICE_DEBUG === '1';
 const SHUTDOWN_GRACE_MS = 30 * 1000;
 const STALE_CHECK_MS = 5 * 60 * 1000;
 const STALE_DESK_CHECK_MS = 60 * 1000;
@@ -76,6 +79,7 @@ function restart() {
   // Release the port first; the new process retries listen until it is free.
   server.close();
   let out = 'ignore';
+  rotateIfLarge(LOG_PATH);
   try {
     out = fs.openSync(LOG_PATH, 'a');
   } catch {
@@ -149,6 +153,22 @@ function route(req, res) {
     return;
   }
 
+  if (req.method === 'GET' && req.url === '/health') {
+    const snap = office.snapshot();
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(
+      JSON.stringify({
+        ok: true,
+        app: snap.app,
+        schema: snap.schema,
+        uptime_s: Math.round(process.uptime()),
+        desks: Object.keys(snap.desks).length,
+        sessions: office.sessions.size,
+        clients: clients.size,
+      }),
+    );
+    return;
+  }
+
   if (req.method === 'GET' && req.url === '/state') {
     res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(office.snapshot()));
     return;
@@ -167,6 +187,7 @@ function route(req, res) {
       }
       if (!evt) return res.writeHead(400).end();
       try {
+        if (DEBUG) console.log(`[${new Date().toISOString()}] event ${evt.hook_event_name} source=${evt.source} session=${(evt.session_id || '-').slice(0, 8)}`);
         office.handle(evt);
       } catch (err) {
         // Keep the server alive; the event is lost but the next one still works.

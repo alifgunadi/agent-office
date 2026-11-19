@@ -73,4 +73,24 @@ async function startServer(extraEnv = {}) {
   };
 }
 
-module.exports = { ROOT, sleep, freePort, request, startServer };
+// A tiny server that records every POST body, standing in for the office when testing senders.
+async function startCapture() {
+  const received = [];
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk) => (body += chunk));
+    req.on('end', () => {
+      try {
+        received.push({ body: JSON.parse(body), headers: req.headers, url: req.url });
+      } catch {
+        received.push({ body: null, headers: req.headers, url: req.url });
+      }
+      res.writeHead(204).end();
+    });
+  });
+  const port = await freePort();
+  await new Promise((resolve) => server.listen(port, '127.0.0.1', resolve));
+  return { port, received, close: () => new Promise((resolve) => server.close(resolve)) };
+}
+
+module.exports = { ROOT, sleep, freePort, request, startServer, startCapture };

@@ -44,6 +44,23 @@ describe('identity and normal flow', () => {
   });
 });
 
+describe('GET /health', () => {
+  it('reports liveness and basic counts', async () => {
+    const res = await srv.request('GET', '/health');
+    assert.equal(res.status, 200);
+    const body = JSON.parse(res.text);
+    assert.equal(body.ok, true);
+    assert.equal(body.app, 'agent-office');
+    assert.equal(body.schema, 1);
+    assert.equal(typeof body.uptime_s, 'number');
+    assert.equal(body.desks, 12);
+  });
+
+  it('follows the same Host check as every other route', async () => {
+    assert.equal((await srv.request('GET', '/health', { headers: { Host: 'evil.example' } })).status, 403);
+  });
+});
+
 describe('POST /event validation', () => {
   it('requires the X-Agent-Office header', async () => {
     assert.equal((await post({ hook_event_name: 'Stop' }, {})).status, 403);

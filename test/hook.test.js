@@ -75,6 +75,11 @@ describe('hook.js never disturbs the host agent', () => {
     assert.equal(r.stdout, '');
   });
 
+  it('tags events with the envelope (v1, claude-code)', async () => {
+    const { v, source } = (await runHook(tool({}))).sent.body;
+    assert.deepEqual({ v, source }, { v: 1, source: 'claude-code' });
+  });
+
   it('sends the guard header', async () => {
     const r = await runHook(tool({}));
     assert.equal(r.sent.headers['x-agent-office'], '1');
@@ -114,14 +119,14 @@ describe('hook.js privacy', () => {
     const r = await runHook(tool({ command: 'ls' }, { prompt: 'SECRET PROMPT', tool_response: 'SECRET OUTPUT', cwd: 'C:/private', transcript_path: 'C:/t.jsonl' }));
     const sent = JSON.stringify(r.sent.body);
     for (const leaked of ['SECRET PROMPT', 'SECRET OUTPUT', 'C:/private', 't.jsonl']) assert.ok(!sent.includes(leaked), leaked);
-    assert.deepEqual(Object.keys(r.sent.body).sort(), ['hook_event_name', 'session_id', 'tool_input', 'tool_name']);
+    assert.deepEqual(Object.keys(r.sent.body).sort(), ['hook_event_name', 'session_id', 'source', 'tool_input', 'tool_name', 'v']);
   });
 
   it('drops wrong-typed fields but still delivers the event', async () => {
     const r = await runHook(JSON.stringify({ hook_event_name: 5, tool_name: {}, tool_input: 'str', session_id: [] }));
     assert.equal(r.code, 0);
     assert.equal(r.stdout, '');
-    assert.deepEqual(r.sent.body, {});
+    assert.deepEqual(r.sent.body, { v: 1, source: 'claude-code' });
   });
 });
 

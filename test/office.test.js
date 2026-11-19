@@ -75,6 +75,20 @@ describe('state machine', () => {
     assert.equal(desk('main').activity, 'waiting for your input');
   });
 
+  it('treats the newer "blocked on you" notification types as waiting', () => {
+    for (const notification_type of ['agent_needs_input', 'elicitation_dialog', 'elicitation_url_dialog']) {
+      send({ hook_event_name: 'UserPromptSubmit' });
+      send({ hook_event_name: 'Notification', notification_type });
+      assert.deepEqual([desk('main').status, desk('main').activity], ['waiting', 'waiting for your input'], notification_type);
+    }
+  });
+
+  it('closes the turn when it ends on an API error (StopFailure)', () => {
+    send({ hook_event_name: 'UserPromptSubmit' });
+    send({ hook_event_name: 'StopFailure' });
+    assert.deepEqual([desk('main').status, desk('main').activity], ['done', 'turn failed']);
+  });
+
   it('ignores unknown events and unknown notification types', () => {
     const before = JSON.stringify(office.snapshot());
     send({ hook_event_name: 'SomethingNew' });
@@ -148,6 +162,25 @@ describe('sessions', () => {
     // A's subagent is forgotten, B's still routes tool events to its desk.
     send({ hook_event_name: 'PreToolUse', session_id: 'B', agent_id: 'b1', tool_name: 'Read' });
     assert.equal(desk('lead-qa').activity, 'Read');
+  });
+
+  it('equal session ids from different sources are different sessions', () => {
+    send({ hook_event_name: 'SessionStart', session_id: 'same', source: 'claude-code' });
+    send({ hook_event_name: 'SessionStart', session_id: 'same', source: 'opencode' });
+    assert.equal(office.sessions.size, 2);
+    send({ hook_event_name: 'SessionEnd', session_id: 'same', source: 'opencode' });
+    assert.equal(office.sessions.size, 1);
+    assert.deepEqual(emptied, []);
+  });
+
+  it('SessionEnd of one source leaves another source working', () => {
+    send({ hook_event_name: 'SessionStart', session_id: 'x', source: 'claude-code' });
+    send({ hook_event_name: 'SubagentStart', session_id: 'x', source: 'claude-code', agent_id: 'c1', agent_type: 'lead-qa' });
+    send({ hook_event_name: 'SessionStart', session_id: 'x', source: 'antigravity' });
+    send({ hook_event_name: 'SubagentStart', session_id: 'x', source: 'antigravity', agent_id: 'g1', agent_type: 'lead-ui' });
+    send({ hook_event_name: 'SessionEnd', session_id: 'x', source: 'antigravity' });
+    assert.equal(desk('lead-qa').status, 'working');
+    assert.equal(desk('lead-ui').status, 'idle');
   });
 
   it('the last SessionEnd resets every desk and reports no sessions', () => {

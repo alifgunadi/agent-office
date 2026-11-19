@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agent-office/event.v1.schema.json",
+  "title": "Agent Office event (envelope v1)",
+  "description": "Body of POST /event on the Agent Office server. Send it with the header X-Agent-Office: 1 to 127.0.0.1:<port>. The server keeps only the properties listed here and silently ignores everything else, so extra fields are harmless but never stored. v and source are optional: a sender that omits them is treated as claude-code, schema v1. Changes to this schema are additive only.",
+  "type": "object",
+  "required": ["hook_event_name"],
+  "properties": {
+    "v": {
+      "description": "Schema version. Omit or send 1.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 999,
+      "default": 1
+    },
+    "source": {
+      "description": "Which agent product sent the event (claude-code, antigravity, opencode, ...). Together with session_id it identifies a session, so equal session ids from different products never collide.",
+      "type": "string",
+      "maxLength": 32,
+      "default": "claude-code"
+    },
+    "hook_event_name": {
+      "description": "Claude Code hook event name. Handled: SessionStart, UserPromptSubmit, PreToolUse, PostToolUseFailure, Notification, SubagentStart, SubagentStop, TeammateIdle, Stop, StopFailure, SessionEnd. Other names are accepted and ignored.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "session_id": { "type": "string", "maxLength": 128 },
+    "agent_id": { "description": "Identifies one running subagent.", "type": "string", "maxLength": 128 },
+    "agent_type": { "description": "Desk id of the subagent (nested ids such as engineering/lead-dba are reduced to lead-dba).", "type": "string", "maxLength": 64 },
+    "teammate_name": { "type": "string", "maxLength": 64 },
+    "tool_name": { "type": "string", "maxLength": 128 },
+    "notification_type": {
+      "description": "Handled: permission_prompt, idle_prompt, agent_needs_input, elicitation_dialog, elicitation_url_dialog.",
+      "type": "string",
+      "maxLength": 64
+    },
+    "tool_input": {
+      "description": "Only these four properties are kept. Senders must already minimise them: base name instead of path, program name instead of command line.",
+      "type": "object",
+      "properties": {
+        "file_path": { "type": "string", "maxLength": 300 },
+        "command": { "description": "The server keeps only the first word.", "type": "string" },
+        "pattern": { "type": "string", "maxLength": 40 },
+        "subagent_type": { "type": "string", "maxLength": 64 }
+      }
+    }
+  }
+}
