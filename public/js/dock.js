@@ -1,0 +1,391 @@
+'use strict';
+
+// ---------- the prompt dock: write a task, address it with @mentions, pick a folder and a runner, send ----------
+// "Mode simulasi": sending creates tasks in the page's own task model (tasklist.js); no agent is started anywhere.
+
+const dockEl = document.getElementById('dock');
+const dockInput = document.getElementById('dock-input');
+const dockChips = document.getElementById('dock-chips');
+const dockWho = document.getElementById('dock-who');
+const dockHint = document.getElementById('dock-hint');
+const dockSend = document.getElementById('dock-send');
+const dockConfirm = document.getElementById('dock-confirm');
+const mentionList = document.getElementById('mention-list');
+const folderBtn = document.getElementById('dock-folder');
+const runnerBtn = document.getElementById('dock-runner');
+
+const FOLDERS = ['agent-office', 'design-system', 'api-gateway']; // sample data until the server lists the folders (a later phase)
+const RUNNERS = [
+  { id: 'claude', ok: true }, { id: 'opencode', ok: true },
+  { id: 'antigravity', ok: false, why: 'CLI tidak ditemukan di PATH' },
+];
+const PLACEHOLDER = 'Ketik tugas atau @mention agent / divisi…';
+const SENDING_MS = 600, SUCCESS_MS = 4000;
+
+const dock = { chips: [], folder: FOLDERS[0], runner: 'claude', sending: false, live: false, answerTask: null, error: '', success: '', successTimer: 0, mention: null, active: -1 };
+
+const nameOf = (id) => roleOf(id).label;
+const guestIds = () => desks.filter((d) => !hasOwn(ROLES, d.id)).map((d) => d.id);
+
+// ---- state of the dock: compact (one line) or expanded (targets, folder, runner, hints)
+
+function setDockState(state) {
+  dockEl.dataset.state = state;
+}
+
+function expandDock() {
+  setDockState('expanded');
+}
+
+// The dock shrinks back to one line when focus leaves it and there is nothing in it.
+function maybeCollapse() {
+  if (dock.sending || dockEl.contains(document.activeElement)) return;
+  if (!dockInput.value.trim() && !dock.chips.length && dockConfirm.hidden) setDockState('compact');
+}
+
+// ---- targets
+
+function renderChips() {
+  dockChips.textContent = '';
+  for (const id of dock.chips) {
+    const li = document.createElement('li');
+    li.className = 'target-chip';
+    li.textContent = '@' + id;
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.setAttribute('aria-label', 'Hapus target @' + id);
+    x.textContent = '×';
+    x.addEventListener('click', () => { dock.chips = dock.chips.filter((c) => c !== id); if (dock.answerTask) dock.answerTask = null; renderChips(); dockInput.focus(); });
+    li.append(x);
+    dockChips.append(li);
+  }
+  // the line above the input: who this conversation is with
+  if (dock.answerTask) {
+    const t = taskStore.tasks.find((q) => q.id === dock.answerTask);
+    dockWho.textContent = 'Membalas ' + (t ? nameOf(t.deskId) : 'agent') + ' (@' + (t ? t.deskId : '') + ')';
+    dockWho.hidden = false;
+    dockInput.placeholder = 'Balas ke ' + (t ? nameOf(t.deskId) : 'agent') + '…';
+  } else if (dock.chips.length === 1) {
+    dockWho.textContent = 'Berbicara dengan ' + nameOf(dock.chips[0]) + ' (@' + dock.chips[0] + ')';
+    dockWho.hidden = false;
+    dockInput.placeholder = 'Tulis arahan untuk ' + nameOf(dock.chips[0]) + '…';
+  } else {
+    dockWho.hidden = true;
+    dockInput.placeholder = PLACEHOLDER;
+  }
+  refreshHint();
+}
+
+function addChip(id) {
+  if (!dock.chips.includes(id)) dock.chips.push(id);
+  renderChips();
+}
+
+// All the agents this prompt goes to: the chips plus whatever the text mentions.
+function currentTargets() {
+  const r = OfficeMentions.resolve(dockInput.value, guestIds());
+  return { ids: [...new Set([...dock.chips, ...r.targets])], resolved: r };
+}
+
+// ---- the line under the input: an error, the connection, a success, or what will happen
+
+function refreshHint() {
+  let text = '', kind = '';
+  if (dock.error) { text = dock.error; kind = 'error'; }
+  else if (!dock.live) { text = 'Menunggu koneksi server…'; kind = 'error'; }
+  else if (dock.success) { text = dock.success; kind = 'ok'; }
+  else {
+    const { ids, resolved } = currentTargets();
+    text = OfficeMentions.describe(ids, resolved, nameOf);
+    if (resolved.unknown.length) text += (text ? ' · ' : '') + '@' + resolved.unknown.join(', @') + ' tidak dikenal (dikirim sebagai teks biasa)';
+    kind = 'preview';
+  }
+  dockHint.textContent = text;
+  dockHint.dataset.kind = kind;
+  dockInput.setAttribute('aria-invalid', String(Boolean(dock.error)));
+}
+
+function setError(text) {
+  dock.error = text;
+  dock.success = '';
+  expandDock();
+  refreshHint();
+}
+
+function setSuccess(text) {
+  clearTimeout(dock.successTimer);
+  dock.success = text;
+  refreshHint();
+  dock.successTimer = setTimeout(() => { dock.success = ''; refreshHint(); }, SUCCESS_MS);
+}
+
+function syncControls() {
+  const locked = dock.sending || !dock.live;
+  dockSend.disabled = locked;
+  dockSend.textContent = dock.sending ? 'Mengirim…' : 'Kirim';
+  folderBtn.disabled = locked;
+  runnerBtn.disabled = locked;
+  dockInput.readOnly = dock.sending;
+}
+
+// net.js tells the dock whether the server is reachable. While it is not, nothing is sent and the draft stays where it is.
+function onConnectionChange(live) {
+  dock.live = live;
+  syncControls();
+  refreshHint();
+}
+
+// ---- the @mention popover (a combobox with a listbox, as the ARIA authoring practices describe)
+
+function closeMention() {
+  dock.mention = null;
+  dock.active = -1;
+  mentionList.hidden = true;
+  mentionList.textContent = '';
+  dockInput.setAttribute('aria-expanded', 'false');
+  dockInput.removeAttribute('aria-activedescendant');
+}
+
+function setActiveMention(i) {
+  const options = [...mentionList.querySelectorAll('[role="option"]')];
+  if (!options.length) return;
+  dock.active = (i + options.length) % options.length;
+  options.forEach((o, k) => { o.classList.toggle('is-active', k === dock.active); o.setAttribute('aria-selected', String(k === dock.active)); });
+  dockInput.setAttribute('aria-activedescendant', options[dock.active].id);
+  options[dock.active].scrollIntoView({ block: 'nearest' });
+}
+
+function openMention() {
+  const m = OfficeMentions.activeMention(dockInput.value, dockInput.selectionStart);
+  if (!m) return closeMention();
+  const items = OfficeMentions.suggestions(m.query, guestIds(), nameOf);
+  if (!items.length) return closeMention();
+  dock.mention = m;
+  mentionList.textContent = '';
+  let group = '', n = 0;
+  for (const it of items) {
+    if (it.group !== group) {
+      group = it.group;
+      const h = document.createElement('li');
+      h.className = 'group';
+      h.setAttribute('role', 'presentation');
+      h.textContent = group;
+      mentionList.append(h);
+    }
+    const li = document.createElement('li');
+    li.id = 'mention-opt-' + n++;
+    li.setAttribute('role', 'option');
+    li.setAttribute('aria-selected', 'false');
+    li.dataset.token = it.token;
+    const label = document.createElement('span');
+    label.textContent = it.label;
+    const hint = document.createElement('small');
+    hint.textContent = it.hint;
+    li.append(label, hint);
+    li.addEventListener('mousedown', (e) => { e.preventDefault(); pickMention(it.token); }); // keep focus in the input
+    mentionList.append(li);
+  }
+  mentionList.hidden = false;
+  dockInput.setAttribute('aria-expanded', 'true');
+  setActiveMention(0);
+}
+
+function pickMention(token) {
+  const r = OfficeMentions.insertMention(dockInput.value, dockInput.selectionStart, token);
+  dockInput.value = r.text;
+  dockInput.setSelectionRange(r.caret, r.caret);
+  closeMention();
+  afterInput();
+  dockInput.focus();
+}
+
+function autosize() {
+  dockInput.style.height = 'auto';
+  dockInput.style.height = Math.min(120, dockInput.scrollHeight) + 'px';
+}
+
+function afterInput() {
+  autosize();
+  dock.error = '';
+  dock.success = '';
+  refreshHint();
+}
+
+dockInput.addEventListener('input', () => { expandDock(); afterInput(); openMention(); });
+dockInput.addEventListener('focus', expandDock);
+dockInput.addEventListener('click', openMention);
+dockInput.addEventListener('keyup', (e) => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) openMention(); });
+dockInput.addEventListener('blur', () => setTimeout(() => { closeMention(); maybeCollapse(); }, 120));
+
+dockInput.addEventListener('keydown', (e) => {
+  const open = !mentionList.hidden;
+  if (open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); setActiveMention(dock.active + (e.key === 'ArrowDown' ? 1 : -1)); return; }
+  if (open && (e.key === 'Enter' || e.key === 'Tab') && !e.ctrlKey && !e.metaKey) {
+    const o = mentionList.querySelectorAll('[role="option"]')[dock.active];
+    if (o) { e.preventDefault(); pickMention(o.dataset.token); return; }
+  }
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    if (open) { closeMention(); return; }
+    if (!dockConfirm.hidden) { hideConfirm(); return; }
+    dockInput.blur();
+    stage.focus();
+    return;
+  }
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); trySend(); }
+});
+
+// ---- sending
+
+function showConfirm(n) {
+  document.getElementById('dock-confirm-text').textContent = 'Kirim tugas ini ke semua ' + n + ' agent?';
+  dockConfirm.hidden = false;
+  document.getElementById('confirm-send').focus();
+}
+
+function hideConfirm() {
+  dockConfirm.hidden = true;
+  dockInput.focus();
+}
+
+function trySend(confirmed) {
+  if (dock.sending || !dock.live) return;
+  const text = dockInput.value.trim();
+  if (!text) return setError('Tulis instruksi terlebih dahulu sebelum mengirim.');
+  const { ids, resolved } = currentTargets();
+  if (!ids.length) return setError('Pilih minimal 1 target: @agent atau @divisi.');
+  if (resolved.everyone && !confirmed) return showConfirm(ids.length);
+  dockConfirm.hidden = true;
+  dock.sending = true;
+  syncControls();
+  setTimeout(() => finishSend(text, ids), SENDING_MS); // a short pause stands in for the round trip to a runner
+}
+
+function finishSend(text, ids) {
+  const now = Date.now();
+  dock.sending = false;
+  if (dock.answerTask) {
+    const t = taskStore.tasks.find((q) => q.id === dock.answerTask);
+    OfficeTasks.answer(taskStore, dock.answerTask, now);
+    dock.answerTask = null;
+    setSuccess('Balasan terkirim ke ' + (t ? nameOf(t.deskId) : 'agent') + ' (simulasi)');
+    announce('Balasan terkirim');
+  } else {
+    const r = OfficeTasks.enqueue(taskStore, { text, targets: ids, folder: dock.folder, runner: dock.runner }, now);
+    if (r.rejected.length) setError('Antrean ' + r.rejected.map((x) => nameOf(x.deskId)).join(', ') + ' penuh (maksimum ' + OfficeTasks.MAX_DESK_QUEUE + ').');
+    if (r.tasks.length) {
+      setSuccess('Task dijalankan di ' + dock.folder + ' dengan ' + dock.runner + ' (simulasi)');
+      announce(r.tasks.length === 1 ? 'Tugas dikirim ke ' + nameOf(r.tasks[0].deskId) : 'Tugas dikirim ke ' + r.tasks.length + ' agent');
+    }
+    if (!r.tasks.length && !r.rejected.length) setError('Tidak ada target yang bisa menerima tugas.');
+  }
+  if (!dock.error) { dockInput.value = ''; dock.chips = []; renderChips(); autosize(); }
+  syncControls();
+  tasksChanged();
+}
+
+dockSend.addEventListener('click', () => trySend());
+document.getElementById('confirm-send').addEventListener('click', () => trySend(true));
+document.getElementById('confirm-cancel').addEventListener('click', hideConfirm);
+
+// ---- Folder and Runner menus (a button that opens a listbox)
+
+function makeMenu(btn, list, build, onPick) {
+  let active = -1;
+  const options = () => [...list.querySelectorAll('[role="option"]')];
+  const mark = (i) => {
+    const o = options();
+    if (!o.length) return;
+    active = (i + o.length) % o.length;
+    o.forEach((el, k) => el.classList.toggle('is-active', k === active));
+    list.setAttribute('aria-activedescendant', o[active].id);
+  };
+  function hide(returnFocus) {
+    list.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+    if (returnFocus) btn.focus();
+  }
+  function show() {
+    for (const other of document.querySelectorAll('.popover--menu')) if (other !== list) other.hidden = true;
+    list.textContent = '';
+    build(list, (token) => { onPick(token); hide(true); });
+    list.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+    const sel = options().findIndex((o) => o.getAttribute('aria-selected') === 'true');
+    mark(sel >= 0 ? sel : 0);
+    list.focus();
+  }
+  btn.addEventListener('click', () => (list.hidden ? show() : hide(true)));
+  list.addEventListener('keydown', (e) => {
+    const o = options();
+    if (e.key === 'ArrowDown') { e.preventDefault(); mark(active + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); mark(active - 1); }
+    else if (e.key === 'Home') { e.preventDefault(); mark(0); }
+    else if (e.key === 'End') { e.preventDefault(); mark(o.length - 1); }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (o[active] && o[active].getAttribute('aria-disabled') !== 'true') o[active].click(); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); hide(true); }
+    else if (e.key === 'Tab') hide(false);
+  });
+  document.addEventListener('mousedown', (e) => { if (!list.hidden && !list.contains(e.target) && !btn.contains(e.target)) hide(false); });
+}
+
+function menuOption(list, id, label, { selected, disabled, why, onClick }) {
+  const li = document.createElement('li');
+  li.id = id;
+  li.setAttribute('role', 'option');
+  li.setAttribute('aria-selected', String(Boolean(selected)));
+  if (disabled) li.setAttribute('aria-disabled', 'true');
+  const s = document.createElement('span');
+  s.textContent = label;
+  li.append(s);
+  if (why) { const w = document.createElement('small'); w.textContent = why; li.append(w); li.setAttribute('aria-description', why); }
+  li.addEventListener('click', () => { if (!disabled) onClick(); });
+  list.append(li);
+  return li;
+}
+
+makeMenu(folderBtn, document.getElementById('folder-list'), (list, pick) => {
+  FOLDERS.forEach((f, i) => menuOption(list, 'folder-opt-' + i, f, { selected: f === dock.folder, onClick: () => pick(f) }));
+  const rule = document.createElement('li');
+  rule.className = 'rule';
+  rule.setAttribute('role', 'presentation');
+  list.append(rule);
+  // the setting of the parent folder arrives with the server side of folders
+  menuOption(list, 'folder-opt-settings', 'Ubah folder induk…', { disabled: true, why: 'segera', onClick: () => {} });
+}, (f) => { dock.folder = f; document.getElementById('dock-folder-name').textContent = f; });
+
+makeMenu(runnerBtn, document.getElementById('runner-list'), (list, pick) => {
+  RUNNERS.forEach((r, i) => menuOption(list, 'runner-opt-' + i, r.id, { selected: r.id === dock.runner, disabled: !r.ok, why: r.ok ? '' : 'tidak tersedia · ' + r.why, onClick: () => pick(r.id) }));
+}, (r) => { dock.runner = r; document.getElementById('dock-runner-name').textContent = r; });
+
+// ---- from the rest of the page
+
+// AlifGunadi arrived at a desk (control.js): the conversation opens with that agent as the target.
+function onConversationStart(id) {
+  dock.answerTask = null;
+  addChip(id);
+  expandDock();
+  dockInput.focus();
+}
+
+// "Jawab" on a task that is waiting for input.
+function openDockFor(deskId, taskId) {
+  dock.answerTask = taskId;
+  dock.chips = [deskId];
+  renderChips();
+  expandDock();
+  dockInput.focus();
+}
+
+// "/" jumps to the dock from anywhere that is not a text field.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== '/' || e.ctrlKey || e.altKey || e.metaKey || e.defaultPrevented || isTypingTarget(document.activeElement)) return;
+  e.preventDefault();
+  expandDock();
+  dockInput.focus();
+});
+
+dockEl.addEventListener('focusout', () => setTimeout(maybeCollapse, 150));
+
+syncControls();
+refreshHint();

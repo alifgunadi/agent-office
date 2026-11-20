@@ -101,9 +101,9 @@ function drawOverlays(cssW) {
     const d = deskMap.get(a.id) || {};
     const bx = Math.max(BUBBLE_MAX / 2 + 6, Math.min(a.hx * sc, cssW - BUBBLE_MAX / 2 - 6));
     const y = Math.max(2, a.hy * sc - 6 - 35);
-    if (d.status === 'working') bubbles.push(() => bubble(d.activity || 'working', bx, y, '#2f6fe0'));
-    else if (d.status === 'waiting') bubbles.push(() => bubble(d.activity || 'waiting', bx, y, '#d99a0b', '!', (reduced || Math.floor(animT / 500) % 2 === 0) ? 1 : 0.25, '#a86a00'));
-    else if (d.status === 'done') bubbles.push(() => bubble(d.activity || 'done', bx, y, '#1f9d55', '✓', 1, '#157a40'));
+    if (d.status === 'working') bubbles.push(() => queueBadge(bx, y, bubble(d.activity || 'working', bx, y, '#2f6fe0'), a.id));
+    else if (d.status === 'waiting') bubbles.push(() => queueBadge(bx, y, bubble(d.activity || 'waiting', bx, y, '#d99a0b', '!', (reduced || Math.floor(animT / 500) % 2 === 0) ? 1 : 0.25, '#a86a00'), a.id));
+    else if (d.status === 'done') bubbles.push(() => queueBadge(bx, y, bubble(d.activity || 'done', bx, y, '#1f9d55', '✓', 1, '#157a40'), a.id));
     else if (d.status === 'idle') {
       draws.push(() => {
         const zf = reduced ? 0.3 : (animT / 900 + a.seed) % 1;

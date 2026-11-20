@@ -9,6 +9,7 @@ let restarting = false;
 function setStatus(text, live) {
   connEl.textContent = text;
   connEl.className = live ? 'on' : '';
+  if (typeof onConnectionChange === 'function') onConnectionChange(!!live); // the dock disables Kirim while the server is not reachable
 }
 
 function setButtons(enabled) {
@@ -77,14 +78,30 @@ canvas.addEventListener('pointerleave', () => { mouse = null; if (reduced) reque
 
 // Messages are kept and applied once per frame, so a burst of events costs one update.
 let pendingData = null;
+let serverState = null; // the last state the server sent; the desks shown are this plus the simulated tasks of the dock
 function applyPending() {
   if (pendingData === null) return;
   const data = pendingData;
   pendingData = null;
   try {
-    const state = JSON.parse(data);
-    renderLog(Array.isArray(state.log) ? state.log : []);
-    desks = orderDesks(state.desks || {});
+    serverState = JSON.parse(data);
+    renderLog(Array.isArray(serverState.log) ? serverState.log : []);
+    rebuildDesks();
+  } catch (err) {
+    console.error('Invalid state message', err);
+  }
+}
+
+// Desks as the server reports them, with the status of a desk replaced while a simulated task of the dock runs on it.
+function rebuildDesks() {
+  if (!serverState) return;
+  try {
+    const merged = Object.create(null), now = Date.now();
+    for (const [id, d] of Object.entries(serverState.desks || {})) {
+      const view = OfficeTasks.deskView(taskStore, id, now);
+      merged[id] = view ? { ...d, status: view.status, activity: view.activity } : d;
+    }
+    desks = orderDesks(merged);
     deskMap = new Map(desks.map((d) => [d.id, d]));
     // Rebuild the layout only when the set of desks changes; status updates just feed the animation.
     const sig = desks.map((d) => d.id).join('|');

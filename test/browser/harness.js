@@ -101,10 +101,14 @@ async function launch() {
       await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: reducedMotion ? 'reduce' : 'no-preference' }] });
       await sleep(900);
     },
-    async key(key, { code = key, text } = {}) {
-      await send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, text, windowsVirtualKeyCode: { ArrowRight: 39, ArrowLeft: 37, Home: 36, End: 35, Tab: 9, Enter: 13 }[key] || 0 });
-      await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code });
+    // modifiers: 1 = Alt, 2 = Ctrl, 4 = Meta, 8 = Shift
+    async key(key, { code = key, text, modifiers = 0 } = {}) {
+      const vk = { ArrowRight: 39, ArrowLeft: 37, ArrowUp: 38, ArrowDown: 40, Home: 36, End: 35, Tab: 9, Enter: 13, Escape: 27, ' ': 32 }[key] || 0;
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, text, modifiers, windowsVirtualKeyCode: vk });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, modifiers, windowsVirtualKeyCode: vk });
     },
+    // Type text into the focused field (fires input events like real typing).
+    async type(text) { await send('Input.insertText', { text }); },
     // Mouse in client (window) coordinates.
     async move(x, y) { await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y }); },
     async click(x, y) {

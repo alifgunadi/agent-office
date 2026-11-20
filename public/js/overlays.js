@@ -34,6 +34,19 @@ function bubble(text, cx, y, accent, prefix, prefixAlpha, prefixColor) {
   }
   ctx.fillStyle = '#1f2a37';
   ctx.fillText(t, x + 12 + preW, ty);
+  return w;
+}
+
+// "+N": how many tasks wait behind the one a desk is running, drawn on the corner of its bubble.
+function queueBadge(cx, y, bubbleW, deskId) {
+  const n = OfficeTasks.counts(taskStore, deskId).queued;
+  if (!n) return;
+  ctx.font = '800 12px ' + FONT;
+  const text = '+' + n, w = Math.ceil(ctx.measureText(text).width) + 14, h = 20;
+  const x = cx + bubbleW / 2 - 10, by = y - 9;
+  rr(x, by, w, h, 10, '#1f2937');
+  ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + w / 2, by + h / 2 + 1);
 }
 
 // Small label floating above a walking or lounging agent; `by` is the bottom edge.

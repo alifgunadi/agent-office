@@ -1,0 +1,159 @@
+'use strict';
+
+// ---------- the Tasks tab: cards for the tasks of the dock, the filters, and the clock of the simulated runner ----------
+// Everything here is the "Mode simulasi" of the dock: tasks live only in this page and nothing is executed anywhere.
+
+const taskStore = OfficeTasks.createStore();
+let taskFilter = 'all';
+let confirmingCancel = null; // id of the running task whose cancel is being confirmed
+let taskSig = '';
+
+const taskListEl = document.getElementById('task-list');
+const tasksEmptyEl = document.getElementById('tasks-empty');
+const STATUS_BADGE = {
+  queued: ['Antre', 'queued'], running: ['Berjalan', 'running'], waiting_input: ['Butuh Input', 'waiting'],
+  done: ['Selesai', 'done'], failed: ['Gagal', 'failed'], cancelled: ['Dibatalkan', 'queued'],
+};
+const EMPTY_TEXT = {
+  all: 'Belum ada tugas aktif. Klik meja agent atau ketik @mention di bawah untuk mulai.',
+  active: 'Tidak ada tugas yang sedang berjalan.',
+  waiting: 'Tidak ada tugas yang menunggu.',
+  done: 'Belum ada tugas yang selesai.',
+};
+
+function agoText(ms) {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return 'baru saja';
+  const m = Math.floor(s / 60);
+  return m < 60 ? m + ' menit lalu' : Math.floor(m / 60) + ' jam lalu';
+}
+
+function taskButton(label, action, id, cls) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'btn btn--sm ' + (cls || '');
+  b.textContent = label;
+  b.dataset.action = action;
+  b.dataset.id = id;
+  return b;
+}
+
+function taskCard(t, now) {
+  const role = roleOf(t.deskId);
+  const li = document.createElement('li');
+  li.className = 'task-card';
+  li.dataset.id = t.id;
+  li.dataset.desk = t.deskId;
+  li.dataset.status = t.status;
+  li.style.setProperty('--role', role.color);
+  const head = document.createElement('div');
+  head.className = 'task-head';
+  const who = document.createElement('span');
+  who.className = 'task-who';
+  who.textContent = role.label;
+  const [label, kind] = STATUS_BADGE[t.status];
+  const badge = document.createElement('span');
+  badge.className = 'badge badge--' + kind;
+  badge.textContent = label;
+  head.append(who, badge);
+  const text = document.createElement('p');
+  text.className = 'task-text';
+  text.textContent = t.text;
+  li.append(head, text);
+  const meta = document.createElement('p');
+  meta.className = 'task-meta';
+  if (t.status === 'queued') { const q = OfficeTasks.queuePosition(taskStore, t); meta.textContent = 'Posisi antrean: ' + q.place + ' dari ' + q.of; }
+  else if (OfficeTasks.FINISHED.includes(t.status)) meta.textContent = label + ' ' + agoText(now - t.finishedAt);
+  else meta.textContent = t.folder + ' · ' + t.runner;
+  li.append(meta);
+  const actions = document.createElement('div');
+  actions.className = 'task-actions';
+  if (confirmingCancel === t.id) {
+    const ask = document.createElement('span');
+    ask.className = 'ask';
+    ask.textContent = 'Batalkan tugas yang berjalan?';
+    actions.append(ask, taskButton('Tidak', 'keep', t.id, 'btn--secondary'), taskButton('Ya, batalkan', 'confirm-cancel', t.id, 'btn--danger'));
+  } else if (t.status === 'waiting_input') {
+    actions.append(taskButton('Buka', 'open', t.id, 'btn--secondary'), taskButton('Jawab', 'answer', t.id, 'btn--primary'));
+  } else if (t.status === 'queued' || t.status === 'running') {
+    actions.append(taskButton('Batal', 'cancel', t.id, 'btn--cancel'));
+  }
+  if (actions.childElementCount) li.append(actions);
+  // the desk of a task is highlighted on the floor while the card is pointed at or focused, and the other way round is the desk tooltip
+  li.addEventListener('mouseenter', () => { focusId = t.deskId; requestRender(); });
+  li.addEventListener('mouseleave', () => { if (focusId === t.deskId) focusId = null; requestRender(); });
+  li.addEventListener('focusin', () => { focusId = t.deskId; requestRender(); });
+  li.addEventListener('focusout', () => { if (focusId === t.deskId) focusId = null; requestRender(); });
+  return li;
+}
+
+function renderTasks(force) {
+  const now = Date.now();
+  const list = OfficeTasks.filterTasks(taskStore, taskFilter);
+  // newest first; finished tasks sink below the live ones
+  const rank = (t) => (OfficeTasks.FINISHED.includes(t.status) ? 1 : 0);
+  const ordered = list.slice().sort((a, b) => rank(a) - rank(b) || b.createdAt - a.createdAt || Number(b.id.slice(1)) - Number(a.id.slice(1)));
+  const sig = taskFilter + '|' + confirmingCancel + '|' + ordered.map((t) => t.id + ':' + t.status + ':' + (t.status === 'queued' ? OfficeTasks.queuePosition(taskStore, t).place : '') + ':' + (t.finishedAt ? Math.floor((now - t.finishedAt) / 60000) : '')).join(',');
+  if (!force && sig === taskSig) return;
+  taskSig = sig;
+  // keep the keyboard focus on the same button across the rebuild
+  const active = document.activeElement;
+  const keep = active && taskListEl.contains(active) && active.dataset.action ? active.dataset.action + '|' + active.dataset.id : null;
+  taskListEl.textContent = '';
+  for (const t of ordered) taskListEl.append(taskCard(t, now));
+  tasksEmptyEl.hidden = ordered.length > 0;
+  tasksEmptyEl.textContent = EMPTY_TEXT[taskFilter] || EMPTY_TEXT.all;
+  if (keep) {
+    const [action, id] = keep.split('|');
+    const again = taskListEl.querySelector('[data-action="' + action + '"][data-id="' + id + '"]') || taskListEl.querySelector('.task-card[data-id="' + id + '"] button');
+    if (again) again.focus();
+  }
+  updateChrome(desks);
+}
+
+// Something changed in the tasks: redraw the list, the desks (a running task makes its desk work) and the AlifGunadi card.
+function tasksChanged() {
+  renderTasks(true);
+  rebuildDesks();
+  requestRender();
+}
+
+taskListEl.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-action]');
+  if (!b) return;
+  const id = b.dataset.id, t = taskStore.tasks.find((q) => q.id === id);
+  if (!t) return;
+  switch (b.dataset.action) {
+    case 'cancel':
+      if (t.status === 'queued') { OfficeTasks.cancel(taskStore, id, Date.now()); announce('Tugas untuk ' + roleOf(t.deskId).label + ' dibatalkan'); }
+      else confirmingCancel = id; // a running task asks first
+      break;
+    case 'keep': confirmingCancel = null; break;
+    case 'confirm-cancel':
+      confirmingCancel = null;
+      OfficeTasks.cancel(taskStore, id, Date.now());
+      announce('Tugas untuk ' + roleOf(t.deskId).label + ' dibatalkan');
+      break;
+    case 'answer': if (typeof openDockFor === 'function') openDockFor(t.deskId, id); break;
+    case 'open': commandForDesk(t.deskId); break;
+    default: break;
+  }
+  tasksChanged();
+});
+
+for (const chip of document.querySelectorAll('.filters .chip')) {
+  chip.addEventListener('click', () => { taskFilter = chip.dataset.filter; renderTasks(true); });
+}
+
+// The clock of the simulated runner: every half second tasks move on, and the desks follow.
+const STATUS_ANNOUNCE = { done: 'selesai mengerjakan tugasnya', waiting_input: 'butuh input dari Anda' };
+setInterval(() => {
+  if (document.hidden || !taskStore.tasks.length) return;
+  const changed = OfficeTasks.step(taskStore, Date.now());
+  for (const t of changed) announce(roleOf(t.deskId).label + ' ' + STATUS_ANNOUNCE[t.status]);
+  renderTasks(false);
+  rebuildDesks(); // also lets a "done" desk go back to idle
+  requestRender();
+}, 500);
+
+renderTasks(true);

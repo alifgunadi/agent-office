@@ -65,6 +65,33 @@
           <canvas id="minimap" role="img" aria-label="Peta kantor: tarik untuk menggeser tampilan"></canvas>
         </div>
         <div class="toast" id="toast" role="status" hidden></div>
+        <section class="dock" id="dock" role="region" aria-label="Prompt dan perintah agent" data-state="compact">
+          <p class="dock-sim" id="dock-sim"><strong>Mode simulasi.</strong> Tugas ditampilkan di sini, tetapi belum dijalankan oleh agent sungguhan.</p>
+          <p class="dock-who" id="dock-who" hidden></p>
+          <div class="dock-row">
+            <span class="dock-at" aria-hidden="true">@</span>
+            <ul class="dock-chips" id="dock-chips" aria-label="Target"></ul>
+            <div class="dock-field">
+              <textarea id="dock-input" rows="1" maxlength="4000" placeholder="Ketik tugas atau @mention agent / divisi…" aria-label="Tugas untuk agent (Ctrl+Enter untuk kirim)" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="mention-list" aria-describedby="dock-hint"></textarea>
+              <ul class="popover" id="mention-list" role="listbox" aria-label="Saran @mention" hidden></ul>
+            </div>
+            <div class="dock-pick expanded-only">
+              <button class="btn btn--secondary btn--lg dock-select" id="dock-folder" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="folder-list"><span>Folder</span> <strong id="dock-folder-name">agent-office</strong><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <ul class="popover popover--menu" id="folder-list" role="listbox" aria-label="Folder kerja" tabindex="-1" hidden></ul>
+            </div>
+            <div class="dock-pick expanded-only">
+              <button class="btn btn--secondary btn--lg dock-select" id="dock-runner" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="runner-list"><span>Runner</span> <strong id="dock-runner-name">claude</strong><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <ul class="popover popover--menu" id="runner-list" role="listbox" aria-label="Runner" tabindex="-1" hidden></ul>
+            </div>
+            <button class="btn btn--primary btn--lg dock-send" id="dock-send" type="button">Kirim</button>
+          </div>
+          <p class="dock-hint" id="dock-hint" role="status" aria-live="polite"></p>
+          <div class="dock-confirm" id="dock-confirm" role="group" aria-label="Konfirmasi" hidden>
+            <span id="dock-confirm-text">Kirim tugas ini ke semua 11 agent?</span>
+            <button class="btn btn--secondary" id="confirm-cancel" type="button">Batal</button>
+            <button class="btn btn--primary" id="confirm-send" type="button">Kirim ke semua</button>
+          </div>
+        </section>
         <div class="me-card" id="me-card">
           <div class="avatar" aria-hidden="true">A</div>
           <div class="who">
@@ -92,7 +119,8 @@
           <button class="chip" type="button" aria-pressed="false" data-filter="waiting">Menunggu</button>
           <button class="chip" type="button" aria-pressed="false" data-filter="done">Selesai</button>
         </div>
-        <p class="empty">Belum ada tugas aktif.</p>
+        <ul class="task-list" id="task-list" aria-label="Daftar tugas"></ul>
+        <p class="empty" id="tasks-empty">Belum ada tugas aktif. Klik meja agent atau ketik @mention di bawah untuk mulai.</p>
       </section>
       <section class="panel" id="panel-activity" role="tabpanel" aria-labelledby="tab-activity">
         <ul id="log" role="log" aria-label="Activity log" aria-live="off"></ul>
@@ -100,6 +128,8 @@
     </aside>
   </div>
   <script src="/js/roles-shared.js"></script>
+  <script src="/js/mentions.js"></script>
+  <script src="/js/tasks.js"></script>
   <script src="/js/roles.js"></script>
   <script src="/js/core.js"></script>
   <script src="/js/draw2d.js"></script>
@@ -115,6 +145,8 @@
   <script src="/js/chrome.js"></script>
   <script src="/js/camera.js"></script>
   <script src="/js/control.js"></script>
+  <script src="/js/tasklist.js"></script>
+  <script src="/js/dock.js"></script>
   <script src="/js/net.js"></script>
 </body>
 

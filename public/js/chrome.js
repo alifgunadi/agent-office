@@ -65,9 +65,10 @@ function updateChrome(list) {
   const status = (main && main.status) || 'idle';
   const label = MAIN_STATE_TEXT[status] || status;
   setText(meStateEl, main && main.activity ? label + ' · ' + main.activity : label);
-  const active = 0, total = 0; // real numbers come with the task list
+  const { active, total } = OfficeTasks.load(taskStore);
   setText(meLoadEl, 'Tugas aktif ' + active + ' / ' + total);
   meFillEl.style.width = (total ? Math.round((active / total) * 100) : 0) + '%';
-  tasksCountEl.hidden = total === 0;
-  setText(tasksCountEl, String(total));
+  const open = taskStore.tasks.filter((t) => !OfficeTasks.FINISHED.includes(t.status)).length;
+  tasksCountEl.hidden = open === 0;
+  setText(tasksCountEl, String(open));
 }
