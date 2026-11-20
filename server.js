@@ -12,6 +12,11 @@ const { sanitizeEvent } = require('./lib/sanitize');
 const { STOPPED_MARKER, LOG_PATH } = require('./lib/paths');
 const { rotateIfLarge } = require('./lib/logfile');
 const { pageCsp, applyBaseHeaders } = require('./lib/security');
+const { loadOrCreateToken, createAuth } = require('./lib/auth');
+const { createWorkspaces } = require('./lib/workspaces');
+const { buildRunners, runnersView, createExecutor, MAX_CONCURRENT } = require('./lib/runner');
+const Tasks = require('./public/js/tasks');
+const Mentions = require('./public/js/mentions');
 
 const LISTEN_RETRIES = 10;
 const LISTEN_RETRY_MS = 200;
@@ -31,8 +36,30 @@ const STALE_DESK_CHECK_MS = 60 * 1000;
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
 const ALLOWED_ORIGINS = new Set([`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`]);
 
-const clients = new Set();
+const MAX_PROMPT_CHARS = 4000;
+const PROMPTS_PER_MINUTE = 20;
+const MAX_TARGETS_PER_PROMPT = 40;
+const MAX_OPEN_TASKS = 40; // queued or running, all desks together: each one is a paid agent run
+const clients = new Map(); // SSE response -> was the client logged in when it connected (only those see tasks)
 let shutdownTimer = null;
+
+// Who may start programs: one secret per user (see lib/auth.js). Without a token file nobody is logged in and the runner stays off.
+let auth = null;
+try { auth = createAuth(loadOrCreateToken()); } catch (err) { console.error('Could not prepare the token file; running without login:', err.message); }
+const isAuthed = (req) => auth !== null && auth.isAuthed(req);
+
+const taskStore = Tasks.createStore();
+const runners = buildRunners();
+const workspaces = createWorkspaces();
+for (const note of workspaces.skipped) console.log('Workspace skipped: ' + note);
+const executor = createExecutor({ store: taskStore, runners, workspaces, onChange: () => broadcast() });
+const taskView = (t) => ({ id: t.id, batchId: t.batchId, deskId: t.deskId, text: t.text, workspaceId: t.workspaceId, runner: t.runner, status: t.status, createdAt: t.createdAt, startedAt: t.startedAt, finishedAt: t.finishedAt, exitCode: t.exitCode, error: t.error });
+const realEnabled = () => [...runners.values()].some((r) => r.ok);
+const promptTimes = [];
+
+function sessionView() {
+  return { app: 'agent-office', schema: 1, authed: true, real: realEnabled(), runners: runnersView(runners), workspaces: workspaces.list(), maxConcurrent: MAX_CONCURRENT };
+}
 
 function cancelShutdown() {
   clearTimeout(shutdownTimer);
@@ -42,12 +69,22 @@ function cancelShutdown() {
 function scheduleShutdown(reason) {
   if (!AUTO_STOP || shutdownTimer) return;
   console.log(`[${new Date().toISOString()}] No active sessions (${reason}). Stopping in ${SHUTDOWN_GRACE_MS / 1000}s.`);
-  shutdownTimer = setTimeout(() => shutdown('auto stop'), SHUTDOWN_GRACE_MS);
+  shutdownTimer = setTimeout(() => {
+    // A task that is still running must not be killed because the hooks of the user's own session went quiet: wait for it.
+    if (executor.running() > 0) { shutdownTimer = null; scheduleShutdown('tasks still running'); return; }
+    shutdown('auto stop');
+  }, SHUTDOWN_GRACE_MS);
 }
 
 function broadcast() {
-  const data = `data: ${JSON.stringify(office.snapshot())}\n\n`;
-  for (const res of clients) res.write(data);
+  const snap = office.snapshot();
+  const plain = `data: ${JSON.stringify(snap)}\n\n`;
+  let withTasks = null;
+  for (const [res, loggedIn] of clients) {
+    if (!loggedIn) { res.write(plain); continue; }
+    if (withTasks === null) withTasks = `data: ${JSON.stringify({ ...snap, tasks: taskStore.tasks.map(taskView) })}\n\n`;
+    res.write(withTasks);
+  }
 }
 
 const office = createOffice({
@@ -61,8 +98,9 @@ setInterval(() => office.sweepDesks(), STALE_DESK_CHECK_MS).unref();
 
 function shutdown(reason) {
   console.log(`[${new Date().toISOString()}] Agent Office stopped (${reason}).`);
+  executor.shutdown();
   server.close();
-  for (const res of clients) res.end();
+  for (const res of clients.keys()) res.end();
   setTimeout(() => process.exit(0), 100);
 }
 
@@ -78,6 +116,7 @@ function manualStop() {
 function restart() {
   console.log(`[${new Date().toISOString()}] Restart requested.`);
   // Release the port first; the new process retries listen until it is free.
+  executor.shutdown();
   server.close();
   let out = 'ignore';
   rotateIfLarge(LOG_PATH);
@@ -96,7 +135,7 @@ function restart() {
   } catch (err) {
     console.error('Restart failed:', err.message);
   }
-  for (const res of clients) res.end();
+  for (const res of clients.keys()) res.end();
   setTimeout(() => process.exit(0), 100);
 }
 
@@ -178,9 +217,13 @@ function route(req, res) {
   if (req.method === 'GET' && req.url === '/events') {
     if (clients.size >= MAX_SSE_CLIENTS) return res.writeHead(429).end();
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
-    res.write(`data: ${JSON.stringify(office.snapshot())}\n\n`);
-    clients.add(res);
-    const keepalive = setInterval(() => res.write(': keepalive\n\n'), KEEPALIVE_MS);
+    const loggedIn = isAuthed(req);
+    res.write(`data: ${JSON.stringify(loggedIn ? { ...office.snapshot(), tasks: taskStore.tasks.map(taskView) } : office.snapshot())}\n\n`);
+    clients.set(res, loggedIn);
+    const keepalive = setInterval(() => {
+      if (loggedIn && !isAuthed(req)) return res.end(); // the session ended (expired or logged out): this stream may not keep receiving prompts
+      res.write(': keepalive\n\n');
+    }, KEEPALIVE_MS);
     req.on('close', () => {
       clearInterval(keepalive);
       clients.delete(res);
@@ -237,13 +280,96 @@ function route(req, res) {
   if (req.method === 'POST' && (req.url === '/control/stop' || req.url === '/control/restart')) {
     // Same header guard as /event: blocks cross-site requests from other pages in the browser.
     if (req.headers['x-agent-office'] !== '1') return res.writeHead(403).end();
+    // They end every running task, so with the runner on they need the login too.
+    if (realEnabled() && !isAuthed(req)) return json(res, 401, { error: 'login_required' });
     const action = req.url === '/control/stop' ? manualStop : restart;
     res.writeHead(202).end();
     res.on('finish', () => setImmediate(action));
     return;
   }
 
+  if (handleTaskRoutes(req, res)) return;
+
   res.writeHead(404).end();
+}
+
+// ---- login, prompts and tasks. Everything here needs the session cookie, except the exchange that makes one.
+const json = (res, code, body, headers = {}) => res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers }).end(JSON.stringify(body));
+const TASK_ID = /^\/tasks\/(t\d{1,9})\/(output|cancel)$/;
+
+function handleTaskRoutes(req, res) {
+  const url = req.url;
+  const isPost = req.method === 'POST';
+  if (!(url === '/auth' || url === '/session' || url === '/prompts' || url === '/tasks' || TASK_ID.test(url))) return false;
+  if (isPost && req.headers['x-agent-office'] !== '1') return res.writeHead(403).end(), true;
+
+  if (isPost && url === '/auth') {
+    if (auth === null) return json(res, 503, { error: 'login_unavailable' }), true;
+    readBody(req, res, (body) => {
+      let token;
+      try { token = JSON.parse(body).token; } catch { return json(res, 400, { error: 'bad_request' }); }
+      const r = auth.exchange(token);
+      if (r.ok) return json(res, 200, { ok: true }, { 'Set-Cookie': r.cookie });
+      json(res, 401, { error: 'wrong_token' });
+    });
+    return true;
+  }
+
+  if (req.method === 'GET' && url === '/session') {
+    json(res, 200, isAuthed(req) ? sessionView() : { app: 'agent-office', schema: 1, authed: false });
+    return true;
+  }
+
+  // From here on: logged in only.
+  if (!isAuthed(req)) return json(res, 401, { error: 'login_required' }), true;
+
+  if (req.method === 'GET' && url === '/tasks') { json(res, 200, { tasks: taskStore.tasks.map(taskView) }); return true; }
+
+  const m = TASK_ID.exec(url);
+  if (m && req.method === 'GET' && m[2] === 'output') {
+    const out = executor.output(m[1]);
+    if (out === null) return json(res, 404, { error: 'no_output' }), true;
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }).end(out);
+    return true;
+  }
+  if (m && isPost && m[2] === 'cancel') {
+    const prev = executor.cancel(m[1]);
+    json(res, prev === null ? 409 : 200, prev === null ? { error: 'not_cancellable' } : { ok: true, was: prev });
+    return true;
+  }
+
+  if (isPost && url === '/prompts') {
+    if (!realEnabled()) return json(res, 409, { error: 'runner_disabled' }), true;
+    const now = Date.now();
+    while (promptTimes.length && now - promptTimes[0] > 60000) promptTimes.shift();
+    if (promptTimes.length >= PROMPTS_PER_MINUTE) return json(res, 429, { error: 'too_many_prompts' }), true;
+    promptTimes.push(now); // counted before the body arrives, so parallel requests cannot all slip under the limit
+    const refuse = (code, error) => { const i = promptTimes.indexOf(now); if (i >= 0) promptTimes.splice(i, 1); json(res, code, { error }); }; // a refused prompt does not use up the quota
+    readBody(req, res, (body) => {
+      if (taskStore.tasks.filter((t) => !Tasks.FINISHED.includes(t.status)).length >= MAX_OPEN_TASKS) return refuse(429, 'too_many_open_tasks');
+      let data;
+      try { data = JSON.parse(body); } catch { return refuse(400, 'bad_request'); }
+      const text = data && typeof data.text === 'string' ? data.text.trim() : '';
+      if (!text || text.length > MAX_PROMPT_CHARS) return refuse(400, 'bad_text');
+      const runnerId = typeof data.runner === 'string' ? data.runner : '';
+      const runner = runners.get(runnerId);
+      if (!runner || !runner.ok) return refuse(400, 'runner_unavailable');
+      const workspaceId = typeof data.workspaceId === 'string' ? data.workspaceId : '';
+      if (!workspaces.resolve(workspaceId)) return refuse(400, 'workspace_unavailable');
+      // The server decides who a prompt is for, from the text itself (the page only helps by showing it).
+      const guests = Object.keys(office.state.desks).filter((id) => !Mentions.AGENT_IDS.includes(id) && id !== 'main');
+      const targets = Mentions.resolve(text, guests).targets;
+      if (!targets.length) targets.push('main');
+      if (targets.length > MAX_TARGETS_PER_PROMPT) return refuse(400, 'too_many_targets');
+      const made = Tasks.enqueue(taskStore, { text, targets, folder: workspaceId, workspaceId, runner: runnerId }, now, MAX_CONCURRENT);
+      executor.pump();
+      broadcast();
+      json(res, 202, { batchId: made.batchId, tasks: made.tasks.map((t) => t.id), rejected: made.rejected });
+    });
+    return true;
+  }
+
+  return false;
 }
 
 const server = http.createServer((req, res) => {

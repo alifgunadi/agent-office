@@ -13,18 +13,72 @@ directly. Please do not post details in a public issue first.
   `Sec-Fetch-Site: cross-site`. `POST` routes also require the header `X-Agent-Office: 1`.
 - **Malformed or hostile events:** `/event` bodies are limited to 64 KiB and reduced to a fixed allowlist of fields with type
   and length checks. Unknown fields are never stored. Guest desks (12), SSE clients (16) and tracked ids (256) are capped.
-- **Page injection:** the page is served with a Content-Security-Policy that allows only its own inline script and style (by
-  hash), its own fonts and its own origin; plus `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` and
+- **Page injection:** the page is served with a Content-Security-Policy that allows only scripts and styles from its own origin
+  (no inline script or style), its own fonts and its own origin; plus `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` and
   `frame-ancestors 'none'`. The page loads nothing from other sites (the Nunito font is bundled in `fonts/`).
 - **Privacy:** hooks and adapters send only event names, ids, tool names, file base names, program names and short search
   patterns. Never prompts, file contents or full command lines.
 - **Desktop host:** only the office origin may load; downloads, permission requests, new windows, frames, host objects, web
   messages and script dialogs are blocked.
 
+## Starting agents from the page (the runner)
+
+The page can send a prompt to the server, which runs it as a program on this PC. That is the one thing in Agent Office that does more
+than show activity, so it is **off by default** and strict when on.
+
+- **Off unless you switch it on** in the server's environment: `AGENT_OFFICE_RUNNER=claude` (or `custom`), and at least one folder in
+  `AGENT_OFFICE_WORKSPACES=name=C:\path;other=D:\path`. Without both, `POST /prompts` answers 409 and the page stays a viewer with the
+  simulation.
+- **Login with a per-user token.** The server makes a random 256-bit token in `%LOCALAPPDATA%\AgentOffice\token` (or
+  `AGENT_OFFICE_TOKEN_FILE`), readable by your account. `start-office.ps1` and the desktop app open the page with the token in the
+  address fragment (`/#token=...`); the page posts it to `/auth`, removes it from the address bar and receives a session cookie
+  (`HttpOnly`, `SameSite=Strict`). The cookie is a random session id the server keeps in memory: it lasts 12 hours, every login is a
+  new one, and a server restart ends all of them, so a cookie that leaks stops working soon. The token itself is never in a cookie or in
+  an HTTP request line. Other Windows accounts cannot read your profile, so they cannot log in. There is deliberately no lockout after
+  wrong tokens: 256 bits cannot be guessed, and a lockout would only let any local process keep you out.
+- **What needs the login:** `POST /prompts`, `GET /tasks`, `GET /tasks/:id/output`, `POST /tasks/:id/cancel`, the `tasks` in the
+  event stream (a stream is closed when its session ends), and, while the runner is on, `POST /control/stop` and `/control/restart`
+  (they end every running task; `stop-office.ps1` falls back to stopping the process). `/state` and anonymous streams never contain prompts or tasks. Writes still need `X-Agent-Office: 1` and the
+  Host/Origin/Sec-Fetch checks, so another web page cannot use your cookie.
+- **The page cannot choose what runs.** It sends the prompt text, a folder *id* and a runner *id*. The program and its arguments are
+  fixed by the server (`claude -p --output-format text --permission-mode <mode>`), the folder is looked up by id and checked again at
+  every run (absolute, real path, not a drive root or system folder), and the targets are read from the text by the server.
+- **No shell, ever.** The program is started with `shell: false`; the prompt travels over stdin, so shell characters and quotes in a
+  prompt are plain text. Tests run these as canaries.
+- **Permission mode of claude:** `plan` (read-only) by default; `AGENT_OFFICE_RUNNER_PERMISSION` may select `dontAsk`, `acceptEdits` or
+  `auto`. `bypassPermissions` and anything else is refused (falls back to `plan`). Choosing a mode that edits files is your decision:
+  a prompt can then change files in the chosen folder.
+- **Limits:** one running task per desk, 3 programs at once, 10 minutes each (the whole process tree is killed; a program that does
+  not end after the kill is given up after 8 seconds), 40 open tasks in all, 64 KiB of output kept, 4000 characters per prompt, 20
+  prompts a minute, 40 desks per prompt (each desk is a separate run of the prompt, which costs API usage). The office does not
+  auto-stop while a task runs.
+- **Environment of the program:** a short allowlist (PATH, profile and temp folders, `ANTHROPIC_*`, `CLAUDE_*`; more names via
+  `AGENT_OFFICE_RUNNER_ENV`), plus `AGENT_OFFICE_PORT` and `AGENT_OFFICE_DATA_DIR` (not secrets) so hooks inside a task report to this
+  office. Every other `AGENT_OFFICE_*` setting and variable of the server is left out.
+- **Hooks of the folder:** `claude -p` does not ask whether to trust a folder, so hooks in that folder's `.claude/settings.json` run.
+  Only list folders you trust in `AGENT_OFFICE_WORKSPACES`.
+- **Stopping:** Stop, Restart and a normal exit end every program the server started. If the server process is killed hard
+  (`taskkill /F`, a crash), a running program may outlive it until it finishes or reaches its timeout.
+- Only `claude` and a `custom` program (`AGENT_OFFICE_RUNNER_CMD` absolute path, `AGENT_OFFICE_RUNNER_ARGS` JSON array) exist for now; the
+  runner has been exercised with a stand-in program in tests, not against a real claude account.
+
 ## What it does not defend against
 
-- **Other local users and processes.** There is no authentication: any process on this machine can post events or read the
-  state, and the `X-Agent-Office` header is not a secret. Do not expose the port beyond `127.0.0.1`.
+- **Other local users and processes, for the viewer.** Without the runner there is no authentication for events or state: any
+  process on this machine can post events or read the state, and the `X-Agent-Office` header is not a secret. Starting agents is the
+  part that is protected (above). Another process **of your own account** can read your token file, so it can log in too: the token
+  protects against other accounts and other web pages, not against code already running as you. Do not expose the port beyond
+  `127.0.0.1`.
+- **Someone else holding the port.** The launchers hand the token to whatever answers on the office's port. If another account (or a
+  rogue process) started a server on that port before yours, it serves the page and so can read the token from the address the
+  launcher opened. A proof such as an HMAC would not help, because the page that computes it comes from the same server. Keep the port
+  yours: start the office before anything else, or set a different `AGENT_OFFICE_PORT` on a shared PC. The token is also on the command
+  line of the launched browser while it starts (visible to your own account only) and in the browser's record of the launched address.
+- **Cookies are not port-isolated.** Browsers send the session cookie to every port on 127.0.0.1, so a local web service you visit in
+  that browser can see it. It is only valid for at most 12 hours, only until the next restart, and a page on another origin still cannot
+  use it from the browser (Host, Origin, `Sec-Fetch-Site` and `SameSite=Strict` checks), but a rogue local *server* can replay it with a
+  non-browser client. Do not run untrusted services on localhost while logged in, and restart the office to end all sessions.
+- **A hard-killed server** (`taskkill /F`, a crash) may leave a running program behind; there is no Windows job object yet.
 - **Write access to the checkout.** Claude Code runs `hook.js` and `ensure-server.js` from this folder with your rights, so
   anyone who can write to the folder can run code as you. On a PC shared between Windows accounts, keep the repo where only
   you can write, for example under your user profile, or remove the broad grant on the parent folder:
@@ -40,5 +94,7 @@ directly. Please do not post details in a public issue first.
 
 ## Hardening switches
 
+- `AGENT_OFFICE_RUNNER`, `AGENT_OFFICE_WORKSPACES`, `AGENT_OFFICE_RUNNER_PERMISSION`, `AGENT_OFFICE_RUNNER_CMD`, `AGENT_OFFICE_RUNNER_ARGS`,
+  `AGENT_OFFICE_RUNNER_ENV`, `AGENT_OFFICE_TOKEN_FILE`: see above. The server must be restarted to pick them up.
 - `AGENT_OFFICE_PORT` changes the port. `AGENT_OFFICE_DATA_DIR` moves the log and the stop marker.
 - `GET /health` reports liveness without exposing event content.

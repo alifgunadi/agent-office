@@ -148,7 +148,7 @@ internal sealed class MainForm : Form
     {
         _offlineTimer.Stop();
         _showingPage = true;
-        _webView.CoreWebView2.Navigate(_config.Origin.ToString());
+        _webView.CoreWebView2.Navigate(_config.StartUrl());
     }
 
     /// <summary>Server unreachable: show only the page background and retry quietly (no new UI).</summary>

@@ -83,6 +83,20 @@ the program name of a shell command (no `VAR=value` prefixes, directories or arg
 Never prompts, file contents, or full commands. The server binds to 127.0.0.1 only, checks the `Host` and `Origin` headers, and rejects
 requests without the `X-Agent-Office` header, so web pages in your browser cannot read or inject events. It also drops every field it does not know.
 
+## Starting tasks from the page (optional, off by default)
+The prompt dock normally runs as a **simulation**. To let it really run an agent, switch the runner on in the server's environment and
+open the office through `start-office.ps1` or the desktop app (they log you in with a per-user token):
+
+```powershell
+$env:AGENT_OFFICE_RUNNER = "claude"                                   # or "custom", see SECURITY.md
+$env:AGENT_OFFICE_WORKSPACES = "agent-office=C:\projects\agent-office;docs=C:\projects\docs"
+powershell -File stop-office.ps1; powershell -File start-office.ps1   # restart so the server sees them
+```
+
+The dock then lists those folders and runners, tasks come from the server, and a card can show the program's output and cancel it.
+`claude` runs read-only (`--permission-mode plan`) unless `AGENT_OFFICE_RUNNER_PERMISSION` says otherwise. Read
+[SECURITY.md](SECURITY.md) first: this is the one feature that runs programs for you.
+
 ## Behavior if the server is not running
 The hook fails silently in a few milliseconds. Claude Code is not affected.
 

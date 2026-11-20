@@ -7,6 +7,32 @@ internal sealed record AppConfig(string Root, int Port)
 
     public Uri Origin => new($"http://127.0.0.1:{Port}/");
 
+    /// <summary>
+    /// The address to open: the office, plus this user's token in the fragment when there is a token file. The page trades the token for a session
+    /// cookie at once and removes it from the address (the fragment is never sent to the server). Same file rule as lib/auth.js.
+    /// Never log the result.
+    /// </summary>
+    public string StartUrl()
+    {
+        try
+        {
+            string? file = Environment.GetEnvironmentVariable("AGENT_OFFICE_TOKEN_FILE");
+            if (string.IsNullOrWhiteSpace(file))
+            {
+                string? local = Environment.GetEnvironmentVariable("LOCALAPPDATA");
+                if (string.IsNullOrWhiteSpace(local)) return Origin.ToString();
+                file = Path.Combine(local, "AgentOffice", "token");
+            }
+            string token = File.ReadAllText(file).Trim();
+            bool valid = token.Length == 64 && token.All(c => c is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
+            return valid ? Origin + "#token=" + token : Origin.ToString();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return Origin.ToString(); // no token (yet): the page opens as a viewer
+        }
+    }
+
     public bool HasServerScript => File.Exists(EnsureServerScript);
 
     public string EnsureServerScript => Path.Combine(Root, "ensure-server.js");
