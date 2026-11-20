@@ -124,7 +124,13 @@ function isTrustedRequest(req) {
   if (!ALLOWED_HOSTS.has(req.headers.host)) return false;
   const origin = req.headers.origin;
   if (origin !== undefined && !ALLOWED_ORIGINS.has(origin)) return false;
-  if (req.headers['sec-fetch-site'] === 'cross-site') return false;
+  if (req.headers['sec-fetch-site'] === 'cross-site') {
+    // A cross-site page may send the user here by a link or a typed redirect (a README, a chat message, a new tab opened by a tool):
+    // a top-level GET navigation. The other site cannot read the result, and framing is refused by the response headers, so it is
+    // allowed. Everything else cross-site (fetch, XHR, EventSource, form posts, embeds) stays refused.
+    const topLevelGet = req.method === 'GET' && req.headers['sec-fetch-mode'] === 'navigate' && req.headers['sec-fetch-dest'] === 'document';
+    if (!topLevelGet) return false;
+  }
   return true;
 }
 

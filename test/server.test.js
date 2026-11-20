@@ -126,6 +126,19 @@ describe('Host, Origin and fetch-metadata checks', () => {
     assert.equal((await srv.request('GET', '/state', { headers: { 'Sec-Fetch-Site': 'cross-site' } })).status, 403);
   });
 
+  it('lets a cross-site page send the user here by a link (a top-level GET navigation), and nothing else cross-site', async () => {
+    const nav = { 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document' };
+    assert.equal((await srv.request('GET', '/', { headers: nav })).status, 200, 'opening the page from a link');
+    // anything that is not a plain navigation stays refused
+    assert.equal((await srv.request('GET', '/state', { headers: { ...nav, 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty' } })).status, 403, 'fetch');
+    assert.equal((await srv.request('GET', '/events', { headers: { ...nav, 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty' } })).status, 403, 'event stream');
+    assert.equal((await srv.request('GET', '/', { headers: { ...nav, 'Sec-Fetch-Dest': 'iframe' } })).status, 403, 'embedding in a frame');
+    assert.equal((await srv.request('POST', '/event', { body: {}, headers: { ...nav, 'X-Agent-Office': '1' } })).status, 403, 'a post, even with the right header');
+    assert.equal((await srv.request('POST', '/control/stop', { headers: { ...nav, 'X-Agent-Office': '1' } })).status, 403, 'the control routes');
+    assert.equal((await srv.request('GET', '/', { headers: { ...nav, Origin: 'http://evil.example' } })).status, 403, 'a foreign Origin still counts');
+    assert.equal((await srv.request('GET', '/', { headers: { ...nav, Host: 'evil.example' } })).status, 403, 'a foreign Host still counts');
+  });
+
   it('accepts the office origin and localhost', async () => {
     const own = { Origin: `http://127.0.0.1:${srv.port}`, 'Sec-Fetch-Site': 'same-origin' };
     assert.equal((await srv.request('GET', '/state', { headers: own })).status, 200);
