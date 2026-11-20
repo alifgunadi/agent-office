@@ -48,6 +48,8 @@ than show activity, so it is **off by default** and strict when on.
 - **Permission mode of claude:** `plan` (read-only) by default; `AGENT_OFFICE_RUNNER_PERMISSION` may select `dontAsk`, `acceptEdits` or
   `auto`. `bypassPermissions` and anything else is refused (falls back to `plan`). Choosing a mode that edits files is your decision:
   a prompt can then change files in the chosen folder.
+  Checked against a real `claude` (2026-11-21): in `plan` mode a run in a test folder read a file, answered, exited 0 and changed nothing.
+  The edit modes (`acceptEdits`, `auto`, `dontAsk`) have only been exercised with the stand-in program so far.
 - **Limits:** one running task per desk, 3 programs at once, 10 minutes each (the whole process tree is killed; a program that does
   not end after the kill is given up after 8 seconds), 40 open tasks in all, 64 KiB of output kept, 4000 characters per prompt, 20
   prompts a minute, 40 desks per prompt (each desk is a separate run of the prompt, which costs API usage). The office does not
