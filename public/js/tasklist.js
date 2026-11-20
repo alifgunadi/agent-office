@@ -1,12 +1,15 @@
 'use strict';
 
 // ---------- the Tasks tab: cards for the tasks of the dock, the filters, and the clock of the simulated runner ----------
-// Everything here is the "Mode simulasi" of the dock: tasks live only in this page and nothing is executed anywhere.
+// Without a login the tasks are the "Mode simulasi" of the dock: they live only in this page and nothing is executed anywhere.
+// In real mode (session.js) the tasks come from the server and this list only shows them; cancel and output go through the server.
 
 const taskStore = OfficeTasks.createStore();
 let taskFilter = 'all';
 let confirmingCancel = null; // id of the running task whose cancel is being confirmed
 let taskSig = '';
+const openOutputs = new Set();   // ids of the cards whose output is shown (real mode)
+const outputText = new Map();    // id -> the last text fetched
 
 const taskListEl = document.getElementById('task-list');
 const tasksEmptyEl = document.getElementById('tasks-empty');
@@ -63,9 +66,17 @@ function taskCard(t, now) {
   const meta = document.createElement('p');
   meta.className = 'task-meta';
   if (t.status === 'queued') { const q = OfficeTasks.queuePosition(taskStore, t); meta.textContent = 'Posisi antrean: ' + q.place + ' dari ' + q.of; }
-  else if (OfficeTasks.FINISHED.includes(t.status)) meta.textContent = label + ' ' + agoText(now - t.finishedAt);
+  else if (OfficeTasks.FINISHED.includes(t.status)) meta.textContent = label + ' ' + agoText(now - t.finishedAt) + (t.error ? ' · ' + t.error : '');
   else meta.textContent = t.folder + ' · ' + t.runner;
   li.append(meta);
+  if (realMode() && openOutputs.has(t.id)) {
+    const pre = document.createElement('pre');
+    pre.className = 'task-output';
+    pre.tabIndex = 0; // scrollable by keyboard
+    pre.setAttribute('aria-label', 'Output tugas');
+    pre.textContent = outputText.has(t.id) ? outputText.get(t.id) || '(belum ada output)' : 'Memuat…';
+    li.append(pre);
+  }
   const actions = document.createElement('div');
   actions.className = 'task-actions';
   if (confirmingCancel === t.id) {
@@ -76,7 +87,10 @@ function taskCard(t, now) {
   } else if (t.status === 'waiting_input') {
     actions.append(taskButton('Buka', 'open', t.id, 'btn--secondary'), taskButton('Jawab', 'answer', t.id, 'btn--primary'));
   } else if (t.status === 'queued' || t.status === 'running') {
+    if (realMode() && t.status === 'running') actions.append(taskButton(openOutputs.has(t.id) ? 'Sembunyikan output' : 'Output', 'output', t.id, 'btn--secondary'));
     actions.append(taskButton('Batal', 'cancel', t.id, 'btn--cancel'));
+  } else if (realMode()) {
+    actions.append(taskButton(openOutputs.has(t.id) ? 'Sembunyikan output' : 'Output', 'output', t.id, 'btn--secondary'));
   }
   if (actions.childElementCount) li.append(actions);
   // the desk of a task is highlighted on the floor while the card is pointed at or focused, and the other way round is the desk tooltip
@@ -93,7 +107,7 @@ function renderTasks(force) {
   // newest first; finished tasks sink below the live ones
   const rank = (t) => (OfficeTasks.FINISHED.includes(t.status) ? 1 : 0);
   const ordered = list.slice().sort((a, b) => rank(a) - rank(b) || b.createdAt - a.createdAt || Number(b.id.slice(1)) - Number(a.id.slice(1)));
-  const sig = taskFilter + '|' + confirmingCancel + '|' + ordered.map((t) => t.id + ':' + t.status + ':' + (t.status === 'queued' ? OfficeTasks.queuePosition(taskStore, t).place : '') + ':' + (t.finishedAt ? Math.floor((now - t.finishedAt) / 60000) : '')).join(',');
+  const sig = taskFilter + '|' + confirmingCancel + '|' + [...openOutputs].map((id) => id + ':' + (outputText.get(id) || '').length).join(',') + '|' + ordered.map((t) => t.id + ':' + t.status + ':' + (t.status === 'queued' ? OfficeTasks.queuePosition(taskStore, t).place : '') + ':' + (t.finishedAt ? Math.floor((now - t.finishedAt) / 60000) : '')).join(',');
   if (!force && sig === taskSig) return;
   taskSig = sig;
   // keep the keyboard focus on the same button across the rebuild
@@ -118,11 +132,42 @@ function tasksChanged() {
   requestRender();
 }
 
+// Real mode: the output a program printed so far (the server keeps the last 64 KiB). Shown as text, never as markup.
+async function fetchOutput(id) {
+  try {
+    const res = await fetch('/tasks/' + encodeURIComponent(id) + '/output', { cache: 'no-store' });
+    outputText.set(id, res.ok ? await res.text() : '(output tidak tersedia)');
+  } catch { outputText.set(id, '(server tidak terjangkau)'); }
+  renderTasks(false);
+}
+
+// An open card follows its task: when the status changed, read the output again.
+function refreshOpenOutputs(before) {
+  for (const id of openOutputs) {
+    const t = taskStore.tasks.find((q) => q.id === id);
+    if (!t) { openOutputs.delete(id); outputText.delete(id); } else if (before.get(id) !== t.status) fetchOutput(id);
+  }
+}
+
+async function cancelReal(t) {
+  const r = await api('POST', '/tasks/' + encodeURIComponent(t.id) + '/cancel');
+  if (r.status === 401) leaveRealMode();
+  else if (r.status === 200) announce('Tugas untuk ' + roleOf(t.deskId).label + ' dibatalkan'); // the card itself changes when the server reports it
+  else announce('Tugas tidak bisa dibatalkan');
+}
+
 taskListEl.addEventListener('click', (e) => {
   const b = e.target.closest('button[data-action]');
   if (!b) return;
   const id = b.dataset.id, t = taskStore.tasks.find((q) => q.id === id);
   if (!t) return;
+  if (realMode() && ['cancel', 'confirm-cancel', 'output'].includes(b.dataset.action)) {
+    if (b.dataset.action === 'output') {
+      if (openOutputs.has(id)) { openOutputs.delete(id); outputText.delete(id); renderTasks(true); } else { openOutputs.add(id); renderTasks(true); fetchOutput(id); }
+    } else if (b.dataset.action === 'cancel' && t.status === 'running') { confirmingCancel = id; renderTasks(true); }
+    else { confirmingCancel = null; cancelReal(t); renderTasks(true); }
+    return;
+  }
   switch (b.dataset.action) {
     case 'cancel':
       if (t.status === 'queued') { OfficeTasks.cancel(taskStore, id, Date.now()); announce('Tugas untuk ' + roleOf(t.deskId).label + ' dibatalkan'); }
@@ -146,10 +191,12 @@ for (const chip of document.querySelectorAll('.filters .chip')) {
 }
 
 // The clock of the simulated runner: every half second tasks move on, and the desks follow.
+let outputTick = 0;
 const STATUS_ANNOUNCE = { done: 'selesai mengerjakan tugasnya', waiting_input: 'butuh input dari Anda' };
 setInterval(() => {
   if (document.hidden || !taskStore.tasks.length) return;
-  const changed = OfficeTasks.step(taskStore, Date.now());
+  const changed = realMode() ? [] : OfficeTasks.step(taskStore, Date.now()); // the clock is the simulation's; a real task ends when the server says so
+  if (realMode() && ++outputTick % 4 === 0) for (const id of openOutputs) { const t = taskStore.tasks.find((q) => q.id === id); if (t && t.status === 'running') fetchOutput(id); }
   for (const t of changed) announce(roleOf(t.deskId).label + ' ' + STATUS_ANNOUNCE[t.status]);
   renderTasks(false);
   rebuildDesks(); // also lets a "done" desk go back to idle

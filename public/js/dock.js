@@ -14,11 +14,22 @@ const mentionList = document.getElementById('mention-list');
 const folderBtn = document.getElementById('dock-folder');
 const runnerBtn = document.getElementById('dock-runner');
 
-const FOLDERS = ['agent-office', 'design-system', 'api-gateway']; // sample data until the server lists the folders (a later phase)
+const FOLDERS = ['agent-office', 'design-system', 'api-gateway']; // sample data for the simulation
 const RUNNERS = [
   { id: 'claude', ok: true }, { id: 'opencode', ok: true },
   { id: 'antigravity', ok: false, why: 'CLI tidak ditemukan di PATH' },
 ];
+// In real mode the lists come from the server (ids only: the page never knows a path or a command).
+const folderList = () => (realMode() ? session.workspaces.map((w) => w.id) : FOLDERS);
+const runnerList = () => (realMode() ? session.runners : RUNNERS);
+const REAL_ERRORS = {
+  bad_text: 'Teks kosong atau terlalu panjang (maksimum 4000 karakter, termasuk @mention).',
+  runner_unavailable: 'Runner ini tidak tersedia di server.',
+  workspace_unavailable: 'Folder ini tidak tersedia di server.',
+  too_many_prompts: 'Terlalu banyak tugas dikirim dalam semenit. Coba lagi sebentar lagi.',
+  too_many_targets: 'Terlalu banyak target dalam satu tugas.',
+  runner_disabled: 'Runner dinonaktifkan di server.',
+};
 const PLACEHOLDER = 'Ketik tugas atau @mention agent / divisi…';
 const SENDING_MS = 600, SUCCESS_MS = 4000;
 
@@ -93,6 +104,7 @@ function refreshHint() {
   let text = '', kind = '';
   if (dock.error) { text = dock.error; kind = 'error'; }
   else if (!dock.live) { text = 'Menunggu koneksi server…'; kind = 'error'; }
+  else if (realMode() && !dock.folder) { text = 'Belum ada folder kerja di server (atur AGENT_OFFICE_WORKSPACES).'; kind = 'error'; }
   else if (dock.success) { text = dock.success; kind = 'ok'; }
   else {
     const { ids, resolved } = currentTargets();
@@ -121,7 +133,7 @@ function setSuccess(text) {
 
 function syncControls() {
   const locked = dock.sending || !dock.live;
-  dockSend.disabled = locked;
+  dockSend.disabled = locked || (realMode() && (!dock.folder || !dock.runner));
   dockSend.textContent = dock.sending ? 'Mengirim…' : 'Kirim';
   folderBtn.disabled = locked;
   runnerBtn.disabled = locked;
@@ -248,6 +260,32 @@ function hideConfirm() {
   dockInput.focus();
 }
 
+// In real mode a send is a round trip to the server. The server decides the targets from the text, so a target chosen as a chip but
+// not typed is added to the text as an @mention.
+async function sendReal(text, ids, resolved) {
+  const missing = ids.filter((id) => !resolved.targets.includes(id));
+  const body = { text: (missing.length ? missing.map((id) => '@' + id).join(' ') + ' ' : '') + text, workspaceId: dock.folder, runner: dock.runner };
+  const r = await api('POST', '/prompts', body);
+  dock.sending = false;
+  if (r.status === 202 && r.data) {
+    const rejected = r.data.rejected || [];
+    if (rejected.length) setError('Antrean ' + rejected.map((x) => nameOf(x.deskId)).join(', ') + ' penuh (maksimum ' + OfficeTasks.MAX_DESK_QUEUE + ').');
+    if (r.data.tasks.length) {
+      setSuccess('Task dikirim ke ' + dock.folder + ' dengan ' + dock.runner);
+      announce(r.data.tasks.length === 1 ? 'Tugas dikirim' : 'Tugas dikirim ke ' + r.data.tasks.length + ' agent');
+    }
+  } else if (r.status === 401) {
+    leaveRealMode();
+    setError('Sesi berakhir. Buka kantor lagi lewat start-office.ps1 atau aplikasi desktop.');
+  } else if (r.status === 0) {
+    setError('Server tidak terjangkau. Tugas belum dikirim.');
+  } else {
+    setError(REAL_ERRORS[r.data && r.data.error] || 'Tugas ditolak server (HTTP ' + r.status + ').');
+  }
+  if (!dock.error) { dockInput.value = ''; dock.chips = []; renderChips(); autosize(); }
+  syncControls();
+}
+
 function trySend(confirmed) {
   if (dock.sending || !dock.live) return;
   const text = dockInput.value.trim();
@@ -258,6 +296,7 @@ function trySend(confirmed) {
   dockConfirm.hidden = true;
   dock.sending = true;
   syncControls();
+  if (realMode()) { sendReal(text, ids, resolved); return; }
   setTimeout(() => finishSend(text, ids), SENDING_MS); // a short pause stands in for the round trip to a runner
 }
 
@@ -345,18 +384,35 @@ function menuOption(list, id, label, { selected, disabled, why, onClick }) {
 }
 
 makeMenu(folderBtn, document.getElementById('folder-list'), (list, pick) => {
-  FOLDERS.forEach((f, i) => menuOption(list, 'folder-opt-' + i, f, { selected: f === dock.folder, onClick: () => pick(f) }));
+  folderList().forEach((f, i) => menuOption(list, 'folder-opt-' + i, f, { selected: f === dock.folder, onClick: () => pick(f) }));
   const rule = document.createElement('li');
   rule.className = 'rule';
   rule.setAttribute('role', 'presentation');
   list.append(rule);
-  // the setting of the parent folder arrives with the server side of folders
+  // the setting of the parent folder arrives with the settings dialog (a later phase)
   menuOption(list, 'folder-opt-settings', 'Ubah folder induk…', { disabled: true, why: 'segera', onClick: () => {} });
 }, (f) => { dock.folder = f; document.getElementById('dock-folder-name').textContent = f; });
 
 makeMenu(runnerBtn, document.getElementById('runner-list'), (list, pick) => {
-  RUNNERS.forEach((r, i) => menuOption(list, 'runner-opt-' + i, r.id, { selected: r.id === dock.runner, disabled: !r.ok, why: r.ok ? '' : 'tidak tersedia · ' + r.why, onClick: () => pick(r.id) }));
+  runnerList().forEach((r, i) => menuOption(list, 'runner-opt-' + i, r.id, { selected: r.id === dock.runner, disabled: !r.ok, why: r.ok ? '' : 'tidak tersedia · ' + r.why, onClick: () => pick(r.id) }));
 }, (r) => { dock.runner = r; document.getElementById('dock-runner-name').textContent = r; });
+
+// ---- real mode: the lists and defaults come from the server, and the "simulation" notice goes away
+const dockSimEl = document.getElementById('dock-sim');
+function onRealMode() {
+  const real = realMode();
+  dockSimEl.hidden = real;
+  if (real) {
+    dock.folder = folderList()[0] || '';
+    dock.runner = (runnerList().find((r) => r.ok) || runnerList()[0] || { id: '' }).id;
+  } else {
+    dock.folder = FOLDERS[0];
+    dock.runner = 'claude';
+  }
+  document.getElementById('dock-folder-name').textContent = dock.folder || '—';
+  document.getElementById('dock-runner-name').textContent = dock.runner || '—';
+  syncControls();
+}
 
 // ---- from the rest of the page
 

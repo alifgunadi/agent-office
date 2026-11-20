@@ -23,6 +23,7 @@ Double-click **Agent Office** on the Desktop. Remove the shortcuts with `desktop
 | What | Behavior |
 |---|---|
 | Open the app | Runs `ensure-server.js` (starts the server only if needed, clears a manual Stop), then shows the office. |
+| Login | Opens the page with this user's token (`%LOCALAPPDATA%\AgentOffice\token`) in the address fragment; the page logs in and removes it. Only matters when the runner is switched on (see SECURITY.md). |
 | Hooks | Unchanged. Claude Code / Antigravity / OpenCode post to the server; the app is just a viewer. |
 | Close the window | The app exits; the server keeps running and still auto-stops 30 s after the last session. |
 | Restart / Stop buttons | Same as in the browser. After Stop, the window stays open with the original notice. |

@@ -40,8 +40,15 @@ async function launch() {
   const origin = `http://127.0.0.1:${port}`;
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-browser-'));
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-browser-profile-'));
+  // The runner is switched on with a fake program (test/fixtures/fake-runner.js), but the browser is not logged in: pages start as viewers.
+  // The real-mode cases log in themselves through the address fragment, like the launchers do.
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-browser-work-'));
+  const tokenFile = path.join(dataDir, 'token');
   const server = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
-    env: { ...process.env, AGENT_OFFICE_PORT: String(port), AGENT_OFFICE_DATA_DIR: dataDir, AGENT_OFFICE_AUTO_STOP: '0' },
+    env: {
+      ...process.env, AGENT_OFFICE_PORT: String(port), AGENT_OFFICE_DATA_DIR: dataDir, AGENT_OFFICE_AUTO_STOP: '0', AGENT_OFFICE_TOKEN_FILE: tokenFile,
+      AGENT_OFFICE_RUNNER: 'custom', AGENT_OFFICE_RUNNER_CMD: process.execPath, AGENT_OFFICE_RUNNER_ARGS: JSON.stringify([path.join(ROOT, 'test', 'fixtures', 'fake-runner.js')]), AGENT_OFFICE_WORKSPACES: 'w=' + workDir,
+    },
     stdio: 'ignore',
   });
   for (let i = 0; i < 60; i++) {
@@ -80,11 +87,22 @@ async function launch() {
   };
   await send('Runtime.enable');
   await send('Log.enable');
+  await send('Network.enable');
   await send('Emulation.setFocusEmulationEnabled', { enabled: true }); // keep the page "focused" even if the window is behind
 
   const api = {
     origin, send, evaluate, problems,
     sleep,
+    token: () => fs.readFileSync(tokenFile, 'utf8').trim(),
+    // Open the page at an address (a fragment included) and wait until it has started.
+    async open(url) {
+      await send('Page.navigate', { url: 'about:blank' }); // a change of the fragment alone would not reload the page
+      await sleep(200);
+      await send('Page.navigate', { url });
+      await sleep(300);
+      await api.waitFor(`typeof booted !== 'undefined' && booted && document.getElementById('conn').textContent === 'live'`, 15000);
+    },
+    clearCookies: () => send('Network.clearBrowserCookies'),
     // A test that provokes a page problem on purpose (a CSP violation, say) removes it so the runner does not fail it.
     expectProblems(pattern) {
       for (let i = problems.length - 1; i >= 0; i--) if (pattern.test(problems[i])) problems.splice(i, 1);

@@ -43,7 +43,7 @@ restartBtn.addEventListener('click', async () => {
   if (!(await sendControl('restart'))) return;
   restarting = true;
   halted = true;
-  source.close();
+  if (source) source.close();
   setStatus('restarting...', false);
   // Poll until the new server answers, then reload to pick up any new index.html.
   const deadline = Date.now() + RESTART_TIMEOUT_MS;
@@ -86,6 +86,8 @@ function applyPending() {
   try {
     serverState = JSON.parse(data);
     renderLog(Array.isArray(serverState.log) ? serverState.log : []);
+    if (applyServerTasks(serverState.tasks)) renderTasks(false);
+    else if (session.authed && !Array.isArray(serverState.tasks)) leaveRealMode(); // this stream is not logged in any more
     rebuildDesks();
   } catch (err) {
     console.error('Invalid state message', err);
@@ -144,6 +146,18 @@ function connect() {
   };
 }
 connect();
+
+// Start the stream again (after the login made a cookie, so the stream carries the tasks).
+function reconnectStream() {
+  if (halted) return;
+  clearTimeout(retryTimer);
+  retryTimer = 0;
+  pendingData = null; // a message of the old stream must not be applied
+  if (source) source.close();
+  connect();
+}
+
+initSession();
 
 booted = true;
 requestRender();

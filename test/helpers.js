@@ -46,7 +46,8 @@ async function startServer(extraEnv = {}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-test-'));
   const child = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
     cwd: ROOT,
-    env: { ...process.env, AGENT_OFFICE_PORT: String(port), AGENT_OFFICE_DATA_DIR: dataDir, AGENT_OFFICE_AUTO_STOP: '0', ...extraEnv },
+    // The token file lives in the throwaway dir too: a test must never create or read the real one in the user's profile.
+    env: { ...process.env, AGENT_OFFICE_PORT: String(port), AGENT_OFFICE_DATA_DIR: dataDir, AGENT_OFFICE_TOKEN_FILE: path.join(dataDir, 'token'), AGENT_OFFICE_AUTO_STOP: '0', AGENT_OFFICE_RUNNER: '', AGENT_OFFICE_WORKSPACES: '', ...extraEnv },
     stdio: 'ignore',
     windowsHide: true,
   });
@@ -62,6 +63,7 @@ async function startServer(extraEnv = {}) {
     port,
     dataDir,
     exit,
+    token: () => fs.readFileSync(path.join(dataDir, 'token'), 'utf8').trim(),
     request: (method, urlPath, opts) => request(port, method, urlPath, opts),
     event: (body) => request(port, 'POST', '/event', { body, headers: header }),
     state: async () => JSON.parse((await request(port, 'GET', '/state')).text),

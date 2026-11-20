@@ -32,18 +32,34 @@
     task.runMs = RUN_MS + (hash(task.text) % RUN_JITTER_MS);
   }
 
+  // Start queued tasks: one running task per desk (the oldest queued one first), and at most maxRunning in all (oldest first).
+  // The simulation has no limit; the server passes its limit on concurrent runners. Returns the tasks that were started.
+  function schedule(store, now, maxRunning) {
+    const limit = maxRunning === undefined ? Infinity : maxRunning;
+    const started = [];
+    let running = store.tasks.filter((t) => t.status === 'running').length;
+    for (const t of store.tasks) {
+      if (running >= limit) break;
+      if (t.status !== 'queued' || busy(store, t.deskId)) continue;
+      start(t, now);
+      started.push(t);
+      running++;
+    }
+    return started;
+  }
+
   // One task per distinct target. A target that is idle starts at once; a busy one queues the task behind its current work.
   // Returns { batchId, tasks, rejected: [{ deskId, reason }] }.
-  function enqueue(store, { text, targets, folder, runner }, now) {
+  function enqueue(store, { text, targets, folder, runner, workspaceId }, now, maxRunning) {
     const batchId = 'b' + store.nextBatch++;
     const made = [], rejected = [];
     for (const deskId of [...new Set(targets)]) {
       if (queuedFor(store, deskId).length >= MAX_DESK_QUEUE) { rejected.push({ deskId, reason: 'queue_full' }); continue; }
-      const task = { id: 't' + store.nextId++, batchId, deskId, text, folder: folder || '', runner: runner || '', status: 'queued', createdAt: now, startedAt: 0, finishedAt: 0, runMs: 0, asked: false };
-      if (!busy(store, deskId)) start(task, now);
+      const task = { id: 't' + store.nextId++, batchId, deskId, text, folder: folder || '', workspaceId: workspaceId || '', runner: runner || '', status: 'queued', createdAt: now, startedAt: 0, finishedAt: 0, runMs: 0, asked: false, exitCode: null, error: '' };
       store.tasks.push(task);
       made.push(task);
     }
+    schedule(store, now, maxRunning);
     prune(store);
     return { batchId, tasks: made, rejected };
   }
@@ -55,10 +71,8 @@
     }
   }
 
-  function startNext(store, deskId, now) {
-    if (busy(store, deskId)) return;
-    const next = queuedFor(store, deskId)[0];
-    if (next) start(next, now);
+  function startNext(store, deskId, now, maxRunning) {
+    schedule(store, now, maxRunning);
   }
 
   // Move the simulation forward. A running task asks a question once if the prompt had a "?", then finishes after its run time.
@@ -68,20 +82,31 @@
       if (t.status !== 'running') continue;
       const ran = now - t.startedAt;
       if (!t.asked && t.text.includes('?') && ran >= ASK_AFTER_MS) { t.status = 'waiting_input'; t.asked = true; changed.push(t); continue; }
-      if (ran >= t.runMs) { t.status = 'done'; t.finishedAt = now; changed.push(t); startNext(store, t.deskId, now); }
+      if (ran >= t.runMs) { t.status = 'done'; t.finishedAt = now; changed.push(t); schedule(store, now); }
     }
     return changed;
   }
 
   // Cancel a queued, running or waiting task. Returns the previous status, or null if it could not be cancelled.
-  function cancel(store, id, now) {
+  function cancel(store, id, now, maxRunning) {
     const t = store.tasks.find((q) => q.id === id);
     if (!t || FINISHED.includes(t.status)) return null;
     const prev = t.status;
     t.status = 'cancelled';
     t.finishedAt = now;
-    if (ACTIVE.includes(prev)) startNext(store, t.deskId, now);
+    if (ACTIVE.includes(prev)) schedule(store, now, maxRunning);
     return prev;
+  }
+
+  // A real runner reports the end of a task: done or failed (exit code and message are kept), and the next in line starts.
+  // Returns the tasks that were started because of it. Does nothing for a task that is already finished (for example cancelled).
+  function finish(store, id, status, now, info, maxRunning) {
+    const t = store.tasks.find((q) => q.id === id);
+    if (!t || FINISHED.includes(t.status) || !FINISHED.includes(status)) return [];
+    t.status = status;
+    t.finishedAt = now;
+    if (info) { if (info.exitCode !== undefined) t.exitCode = info.exitCode; if (info.error) t.error = String(info.error).slice(0, 300); }
+    return schedule(store, now, maxRunning);
   }
 
   // The user answered a task that was waiting for input: it carries on.
@@ -143,5 +168,5 @@
     return { place: q.indexOf(task) + 1, of: q.length };
   }
 
-  return Object.freeze({ MAX_TASKS, MAX_DESK_QUEUE, DONE_SHOWN_MS, ACTIVE, FINISHED, createStore, enqueue, step, cancel, answer, counts, filterTasks, deskView, load, queuePosition, summary });
+  return Object.freeze({ schedule, finish, MAX_TASKS, MAX_DESK_QUEUE, DONE_SHOWN_MS, ACTIVE, FINISHED, createStore, enqueue, step, cancel, answer, counts, filterTasks, deskView, load, queuePosition, summary });
 });
