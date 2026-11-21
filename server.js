@@ -16,6 +16,7 @@ const { pageCsp, applyBaseHeaders } = require('./lib/security');
 const { loadOrCreateToken, createAuth } = require('./lib/auth');
 const { createWorkspaces } = require('./lib/workspaces');
 const { createSettings } = require('./lib/settings');
+const { createIntegrations, contextText } = require('./lib/integrations');
 const { buildRunners, runnersView, createExecutor, MAX_CONCURRENT } = require('./lib/runner');
 const Tasks = require('./public/js/tasks');
 const Mentions = require('./public/js/mentions');
@@ -56,6 +57,7 @@ const taskFile = createTaskFile({ file: path.join(DATA_DIR, 'agent-office-tasks.
 const restoredTasks = taskFile.load();
 if (restoredTasks) console.log('Restored ' + restoredTasks + ' task(s).');
 const runners = buildRunners();
+const integrations = createIntegrations(); // Jira, Figma and Penpot links as read-only context; off without a token (lib/integrations.js)
 const settings = createSettings();
 const workspaces = createWorkspaces({ settings, exclude: [__dirname] }); // no folders until a parent folder is chosen; this checkout is never one
 for (const note of workspaces.skipped) console.log('Workspace skipped: ' + note);
@@ -64,6 +66,8 @@ const taskView = (t) => ({ id: t.id, batchId: t.batchId, deskId: t.deskId, text:
 const realEnabled = () => [...runners.values()].some((r) => r.ok);
 const promptTimes = [];
 const checkTimes = [];
+const resolveTimes = [];
+const RESOLVES_PER_MINUTE = 30;
 // the folder check reads the disk for whoever asks: a few a second is plenty for typing in the dialog
 function takeCheckQuota() {
   const now = Date.now();
@@ -74,7 +78,7 @@ function takeCheckQuota() {
 }
 
 function sessionView() {
-  return { app: 'agent-office', schema: 1, authed: true, real: realEnabled(), runners: runnersView(runners), workspaces: workspaces.list(), maxConcurrent: MAX_CONCURRENT };
+  return { app: 'agent-office', schema: 1, authed: true, real: realEnabled(), runners: runnersView(runners), workspaces: workspaces.list(), integrations: integrations.providers(), maxConcurrent: MAX_CONCURRENT };
 }
 
 function cancelShutdown() {
@@ -319,7 +323,7 @@ const TASK_ID = /^\/tasks\/(t\d{1,9})\/(output|cancel)$/;
 function handleTaskRoutes(req, res) {
   const url = req.url;
   const isPost = req.method === 'POST';
-  if (!(url === '/auth' || url === '/session' || url === '/prompts' || url === '/tasks' || url === '/workspaces' || url === '/settings' || url === '/settings/check' || url === '/settings/root' || TASK_ID.test(url))) return false;
+  if (!(url === '/integrations/resolve' || url === '/auth' || url === '/session' || url === '/prompts' || url === '/tasks' || url === '/workspaces' || url === '/settings' || url === '/settings/check' || url === '/settings/root' || TASK_ID.test(url))) return false;
   if (isPost && req.headers['x-agent-office'] !== '1') return res.writeHead(403).end(), true;
 
   if (isPost && url === '/auth') {
@@ -363,6 +367,21 @@ function handleTaskRoutes(req, res) {
     return true;
   }
 
+  // Links in a prompt: the page asks what they are (read-only, cached, limited); the server asks Jira, Figma or Penpot itself.
+  if (isPost && url === '/integrations/resolve') {
+    const t = Date.now();
+    while (resolveTimes.length && t - resolveTimes[0] > 60000) resolveTimes.shift();
+    if (resolveTimes.length >= RESOLVES_PER_MINUTE) return json(res, 429, { error: 'too_many_requests' }), true;
+    resolveTimes.push(t);
+    readBody(req, res, (body) => {
+      let data;
+      try { data = JSON.parse(body); } catch { return json(res, 400, { error: 'bad_request' }); }
+      if (!data || !Array.isArray(data.urls) || data.urls.length > 50) return json(res, 400, { error: 'bad_request' });
+      integrations.resolve(data.urls).then((results) => json(res, 200, { results })).catch(() => json(res, 500, { error: 'failed' }));
+    });
+    return true;
+  }
+
   if (req.method === 'GET' && url === '/tasks') { json(res, 200, { tasks: taskStore.tasks.map(taskView) }); return true; }
 
   const m = TASK_ID.exec(url);
@@ -401,10 +420,20 @@ function handleTaskRoutes(req, res) {
       const targets = Mentions.resolve(text, guests).targets;
       if (!targets.length) targets.push('main');
       if (targets.length > MAX_TARGETS_PER_PROMPT) return refuse(400, 'too_many_targets');
-      const made = Tasks.enqueue(taskStore, { text, targets, folder: workspaceId, workspaceId, runner: runnerId }, now, MAX_CONCURRENT);
-      executor.pump();
-      broadcast();
-      json(res, 202, { batchId: made.batchId, tasks: made.tasks.map((t) => t.id), rejected: made.rejected });
+      const urls = Array.isArray(data.urls) ? data.urls.filter((u) => typeof u === 'string').slice(0, 10) : [];
+      const go = (context) => {
+        if (taskStore.tasks.filter((t) => !Tasks.FINISHED.includes(t.status)).length >= MAX_OPEN_TASKS) return refuse(429, 'too_many_open_tasks');
+        const made = Tasks.enqueue(taskStore, { text, targets, folder: workspaceId, workspaceId, runner: runnerId }, now, MAX_CONCURRENT);
+        if (context) for (const t of made.tasks) t.context = context; // read-only text in front of the prompt for the program; not shown, not saved
+        executor.pump();
+        broadcast();
+        json(res, 202, { batchId: made.batchId, tasks: made.tasks.map((t) => t.id), rejected: made.rejected, context: Boolean(context) });
+      };
+      if (!urls.length) return go('');
+      // The server asks for the links itself (cached): what the page showed is not taken on trust.
+      let answered = false;
+      const once = (context) => { if (answered) return; answered = true; try { go(context); } catch (err) { console.error('Prompt failed:', err.message); if (!res.headersSent) json(res, 500, { error: 'failed' }); } };
+      integrations.resolve(urls).then((results) => once(contextText(results))).catch(() => once(''));
     });
     return true;
   }

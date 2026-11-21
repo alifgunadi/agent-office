@@ -223,7 +223,7 @@ function afterInput() {
   refreshHint();
 }
 
-dockInput.addEventListener('input', () => { expandDock(); afterInput(); openMention(); saveDockDraftSoon(); });
+dockInput.addEventListener('input', () => { expandDock(); afterInput(); openMention(); saveDockDraftSoon(); if (typeof scheduleContext === 'function') scheduleContext(); });
 dockInput.addEventListener('focus', expandDock);
 dockInput.addEventListener('click', openMention);
 dockInput.addEventListener('keyup', (e) => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) openMention(); });
@@ -265,6 +265,8 @@ function hideConfirm() {
 async function sendReal(text, ids, resolved) {
   const missing = ids.filter((id) => !resolved.targets.includes(id));
   const body = { text: (missing.length ? missing.map((id) => '@' + id).join(' ') + ' ' : '') + text, workspaceId: dock.folder, runner: dock.runner };
+  const urls = typeof contextUrlsToSend === 'function' ? contextUrlsToSend() : [];
+  if (urls.length) body.urls = urls;
   const r = await api('POST', '/prompts', body);
   dock.sending = false;
   if (r.status === 202 && r.data) {
@@ -282,7 +284,7 @@ async function sendReal(text, ids, resolved) {
   } else {
     setError(REAL_ERRORS[r.data && r.data.error] || 'Tugas ditolak server (HTTP ' + r.status + ').');
   }
-  if (!dock.error) { dockInput.value = ''; dock.chips = []; renderChips(); autosize(); saveDockPrefs(); }
+  if (!dock.error) { dockInput.value = ''; dock.chips = []; renderChips(); autosize(); saveDockPrefs(); if (typeof contextAfterSend === 'function') contextAfterSend(); }
   syncControls();
 }
 
@@ -460,6 +462,7 @@ function onRealMode() {
   document.getElementById('dock-folder-name').textContent = dock.folder || '—';
   document.getElementById('dock-runner-name').textContent = dock.runner || '—';
   syncControls();
+  if (typeof onContextMode === 'function') onContextMode();
 }
 
 // ---- from the rest of the page

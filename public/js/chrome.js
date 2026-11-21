@@ -17,7 +17,8 @@ const LEGEND_ZONES = [['trainer', 'AlifGunadi Office'], ['product', 'Product'], 
 
 // Tabs (WAI-ARIA tabs pattern: roving tabindex, arrows, Home/End). Both panels stay in the DOM: a hidden panel is
 // still updated, so the activity log keeps filling while another tab is showing.
-const tabButtons = [document.getElementById('tab-tasks'), document.getElementById('tab-activity')];
+const tabButtons = [document.getElementById('tab-tasks'), document.getElementById('tab-activity'), document.getElementById('tab-context')];
+const visibleTabs = () => tabButtons.filter((t) => !t.hidden); // the Konteks tab only exists in real mode
 
 function selectTab(button, focus) {
   for (const tab of tabButtons) {
@@ -32,12 +33,13 @@ function selectTab(button, focus) {
 for (const tab of tabButtons) {
   tab.addEventListener('click', () => selectTab(tab, false));
   tab.addEventListener('keydown', (e) => {
-    const i = tabButtons.indexOf(tab);
+    const tabs = visibleTabs();
+    const i = tabs.indexOf(tab);
     let next = null;
-    if (e.key === 'ArrowRight') next = tabButtons[(i + 1) % tabButtons.length];
-    else if (e.key === 'ArrowLeft') next = tabButtons[(i + tabButtons.length - 1) % tabButtons.length];
-    else if (e.key === 'Home') next = tabButtons[0];
-    else if (e.key === 'End') next = tabButtons[tabButtons.length - 1];
+    if (e.key === 'ArrowRight') next = tabs[(i + 1) % tabs.length];
+    else if (e.key === 'ArrowLeft') next = tabs[(i + tabs.length - 1) % tabs.length];
+    else if (e.key === 'Home') next = tabs[0];
+    else if (e.key === 'End') next = tabs[tabs.length - 1];
     if (next) { e.preventDefault(); selectTab(next, true); }
   });
 }

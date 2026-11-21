@@ -6,7 +6,10 @@ let input = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (c) => { input += c; });
 process.stdin.on('end', () => {
-  const word = input.split(/\s/)[0];
+  // a context paragraph may come in front of the prompt (integrations); the command word is the first word of the prompt itself
+  const label = 'Perintah pengguna:\n';
+  const body = input.startsWith('[Konteks') ? input.slice(input.indexOf(label) + label.length) : input;
+  const word = body.split(/\s/)[0];
   if (word === 'echo') { process.stdout.write('got: ' + input + '\n'); }
   else if (word === 'fail') { process.stderr.write('boom\n'); process.exitCode = 3; }
   else if (word === 'cwd') { process.stdout.write(process.cwd() + '\n'); }
