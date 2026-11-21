@@ -118,7 +118,7 @@ module.exports = [
     name: 'camera: in the stacked layout turning and wall modes are disabled with a reason, zoom still works, and the choice comes back in the wide layout',
     async run(page) {
       await click(page, 'cam-right');
-      await page.viewport(1024, 768);
+      await page.viewport(600, 700);
       await page.waitFor(`layout.cols === 2`);
       const r = JSON.parse(await val(page, `JSON.stringify({ dis: ['cam-left', 'cam-right'].map(i => document.getElementById(i).getAttribute('aria-disabled')), title: document.getElementById('cam-left').title, readout: document.getElementById('camera-readout').textContent, rot: layout.rot })`));
       assert.deepEqual(r.dis, ['true', 'true']);

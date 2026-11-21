@@ -22,6 +22,10 @@
       <button id="btn-stop" class="btn btn--danger-soft" type="button"
         title="Stop the server until a new Claude Code session or start-office.ps1">Stop</button>
     </div>
+    <div class="menu-wrap">
+      <button id="btn-menu" class="icon-btn icon-btn--lg" type="button" aria-label="Menu" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-pop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+      <ul class="popover popover--menu menu-pop" id="menu-pop" role="menu" aria-label="Menu" hidden></ul>
+    </div>
   </header>
   <div class="workspace">
     <main>
@@ -29,7 +33,12 @@
       <div class="stage-wrap">
         <div class="stage" tabindex="0"><canvas id="office" role="img"
             aria-label="Office floorplan with agent desks and their status"></canvas></div>
+        <button class="chip legend-toggle" id="legend-toggle" type="button" aria-expanded="false" aria-controls="legend">5 zona · ketuk</button>
         <ul class="legend" id="legend" aria-label="Office zones"></ul>
+        <div class="focus-wrap">
+          <button class="btn btn--secondary focus-btn" id="focus-desk" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="focus-list">Fokus ke meja</button>
+          <ul class="popover popover--menu focus-list" id="focus-list" role="listbox" aria-label="Pilih meja" tabindex="-1" hidden></ul>
+        </div>
         <section class="camera-card" id="camera" role="group" aria-label="Kamera">
           <div class="camera-head">
             <svg class="camera-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
@@ -108,7 +117,9 @@
       <ul id="agent-list" class="sr-only" aria-label="Agents"></ul>
       <div id="announce" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
     </main>
-    <aside aria-label="Tasks and activity">
+    <aside aria-label="Tasks and activity" id="side-panel">
+      <button class="sheet-handle" id="sheet-toggle" type="button" aria-expanded="false" aria-controls="side-panel-body" aria-label="Buka panel tugas dan aktivitas"><span aria-hidden="true"></span></button>
+      <div class="side-body" id="side-panel-body">
       <div class="tabs" role="tablist" aria-label="Side panel">
         <button class="tab" id="tab-tasks" role="tab" type="button" aria-selected="false" aria-controls="panel-tasks" tabindex="-1">Tasks <span class="badge badge--count" id="tasks-count" hidden>0</span></button>
         <button class="tab" id="tab-activity" role="tab" type="button" aria-selected="true" aria-controls="panel-activity">Activity</button>
@@ -121,13 +132,26 @@
           <button class="chip" type="button" aria-pressed="false" data-filter="done">Selesai</button>
         </div>
         <ul class="task-list" id="task-list" aria-label="Daftar tugas"></ul>
+        <p class="task-pos" id="task-pos" aria-live="polite" hidden></p>
         <p class="empty" id="tasks-empty">Belum ada tugas aktif. Klik meja agent atau ketik @mention di bawah untuk mulai.</p>
       </section>
       <section class="panel" id="panel-activity" role="tabpanel" aria-labelledby="tab-activity">
         <ul id="log" role="log" aria-label="Activity log" aria-live="off"></ul>
       </section>
+      </div>
     </aside>
   </div>
+  <dialog id="about-dialog" class="dialog" aria-labelledby="about-title">
+    <form method="dialog" class="dialog-form" id="about-form">
+      <header class="dialog-head">
+        <h2 id="about-title">Tentang</h2>
+        <button class="icon-btn icon-btn--sm" id="about-close" type="button" aria-label="Tutup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      </header>
+      <div class="dialog-body">
+        <p class="dialog-lead">Agent Office menampilkan agent Claude Code, Antigravity dan OpenCode sebagai kantor pixel-art yang hidup. Server berjalan hanya di komputer ini (127.0.0.1) dan hook hanya mengirim nama peristiwa, id, nama alat dan nama berkas, tanpa isi.</p>
+      </div>
+    </form>
+  </dialog>
   <dialog id="settings-dialog" class="dialog" aria-labelledby="settings-title" aria-describedby="settings-lead">
     <form method="dialog" class="dialog-form" id="settings-form" novalidate>
       <header class="dialog-head">
@@ -171,6 +195,7 @@
   <script src="/js/tasklist.js"></script>
   <script src="/js/dock.js"></script>
   <script src="/js/settings.js"></script>
+  <script src="/js/responsive.js"></script>
   <script src="/js/net.js"></script>
 </body>
 

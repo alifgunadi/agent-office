@@ -15,9 +15,11 @@ module.exports = [
       await page.viewport(1280, 800);
       assert.equal(await val(page, 'layout.cols'), 0, 'cols at 1280');
       await page.viewport(1100, 800);
-      assert.equal(await val(page, 'layout.cols'), 3, 'cols at 1100');
-      await page.viewport(1024, 768);
-      assert.equal(await val(page, 'layout.cols'), 2, 'cols at 1024');
+      assert.equal(await val(page, 'layout.cols'), 0, 'cols at 1100: the side panel is below the stage, so the stage is wide');
+      await page.viewport(800, 700);
+      assert.equal(await val(page, 'layout.cols'), 3, 'cols at 800');
+      await page.viewport(600, 700);
+      assert.equal(await val(page, 'layout.cols'), 2, 'cols at 600');
     },
   },
   {

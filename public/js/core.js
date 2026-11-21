@@ -66,9 +66,21 @@ function hashStr(s) {
 
 // Reduced motion: teleport between desk and lounge and freeze the canvas animation.
 const motionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
-let reduced = !!(motionQuery && motionQuery.matches);
+// The page can also ask for less motion itself (the menu), on top of the system setting; the choice is remembered on this device.
+const MOTION_KEY = 'agent-office.reduce-motion';
+let userReduce = false;
+try { userReduce = localStorage.getItem(MOTION_KEY) === '1'; } catch { /* storage blocked */ }
+if (userReduce) document.documentElement.classList.add('reduce-motion');
+let reduced = !!(motionQuery && motionQuery.matches) || userReduce;
+function setUserReduce(on) {
+  userReduce = on;
+  try { localStorage.setItem(MOTION_KEY, on ? '1' : '0'); } catch { /* storage blocked */ }
+  document.documentElement.classList.toggle('reduce-motion', on);
+  reduced = !!(motionQuery && motionQuery.matches) || on;
+  if (booted) renderNow();
+}
 if (motionQuery) {
-  const onMotion = (e) => { reduced = e.matches; if (booted) renderNow(); };
+  const onMotion = (e) => { reduced = e.matches || userReduce; if (booted) renderNow(); };
   if (motionQuery.addEventListener) motionQuery.addEventListener('change', onMotion);
   else if (motionQuery.addListener) motionQuery.addListener(onMotion);
 }
