@@ -944,3 +944,92 @@ aside {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------- settings dialog ---------- */
+
+.dialog {
+  width: min(508px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100vh - 2 * var(--space-4));
+  padding: 0;
+  color: var(--color-ink);
+  background: var(--color-paper);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-16);
+  box-shadow: var(--shadow-float);
+}
+
+.dialog::backdrop {
+  background: rgba(31, 41, 55, .45);
+}
+
+.dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+}
+
+.dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.dialog-head h2 {
+  margin: 0;
+  font-size: var(--fs-18);
+  line-height: var(--lh-24);
+}
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.dialog-label {
+  font-size: var(--fs-13);
+  line-height: var(--lh-16);
+  font-weight: 800;
+}
+
+.dialog-lead,
+.dialog-source,
+.dialog-status {
+  margin: 0;
+  font-size: var(--fs-12);
+  line-height: var(--lh-16);
+  color: var(--color-muted);
+}
+
+.dialog-status {
+  min-height: var(--lh-16);
+  font-weight: 700;
+}
+
+.dialog-status[data-kind="error"] { color: var(--color-danger-fg); }
+.dialog-status[data-kind="ok"] { color: var(--color-done-fg); }
+
+.dialog-input {
+  height: var(--ctl-36);
+  padding: 0 var(--space-3);
+  font: inherit;
+  font-size: var(--fs-13);
+  color: var(--color-ink);
+  background: var(--color-paper);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-8);
+}
+
+.dialog-input[aria-invalid="true"] { border-color: var(--color-danger-border); }
+.dialog-input:disabled { background: var(--color-wash); color: var(--color-muted); }
+
+.dialog-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.dialog-spacer { flex: 1; }

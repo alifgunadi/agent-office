@@ -103,6 +103,20 @@ module.exports = [
     },
   },
   {
+    name: 'real mode: the settings dialog reads the server, which has a fixed folder list, so it is locked and shows the count',
+    async run(page) {
+      await page.open(page.origin + '/#token=' + page.token());
+      await page.waitFor(`realMode()`);
+      await val(page, `document.getElementById('btn-settings').click(); true`);
+      await page.waitFor(`document.getElementById('settings-status').textContent.includes('dikunci')`);
+      assert.equal(await val(page, `document.getElementById('settings-root').disabled`), true);
+      assert.match(await val(page, `document.getElementById('settings-status').textContent`), /1 folder tersedia/);
+      assert.match(await val(page, `document.getElementById('settings-source').textContent`), /AGENT_OFFICE_WORKSPACES/);
+      assert.ok(!(await val(page, `document.getElementById('settings-dialog').textContent`)).includes('ao-browser-work'), 'no path shown');
+      await val(page, `closeSettings(); true`);
+    },
+  },
+  {
     name: 'real mode: without the session the page is back to a viewer with the simulation',
     async run(page) {
       await page.clearCookies();

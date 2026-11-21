@@ -258,7 +258,7 @@ module.exports = [
       await val(page, `document.getElementById('dock-folder').click(); true`);
       const open = JSON.parse(await val(page, `JSON.stringify({ expanded: document.getElementById('dock-folder').getAttribute('aria-expanded'), opts: [...document.querySelectorAll('#folder-list [role=option]')].map((o) => o.textContent + ':' + o.getAttribute('aria-selected') + ':' + (o.getAttribute('aria-disabled') || '')), focus: document.activeElement.id })`));
       assert.equal(open.expanded, 'true');
-      assert.deepEqual(open.opts, ['agent-office:true:', 'design-system:false:', 'api-gateway:false:', 'Ubah folder induk…segera:false:true']);
+      assert.deepEqual(open.opts, ['agent-office:true:', 'design-system:false:', 'api-gateway:false:', 'Ubah folder induk…:false:']);
       assert.equal(open.focus, 'folder-list');
       await page.key('ArrowDown');
       await page.key('Enter');

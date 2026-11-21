@@ -17,6 +17,7 @@
     <h1>ALIF'S OFFICE</h1>
     <span id="conn" aria-live="polite">disconnected</span>
     <div class="controls">
+      <button id="btn-settings" class="icon-btn" type="button" aria-label="Pengaturan" title="Pengaturan" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM19.4 13.5a7.7 7.7 0 0 0 0-3l1.9-1.5-2-3.4-2.3.9a7.6 7.6 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5a7.6 7.6 0 0 0-2.6 1.5l-2.3-.9-2 3.4 1.9 1.5a7.7 7.7 0 0 0 0 3l-1.9 1.5 2 3.4 2.3-.9a7.6 7.6 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.6 7.6 0 0 0 2.6-1.5l2.3.9 2-3.4z"/></svg></button>
       <button id="btn-restart" class="btn btn--secondary" type="button" title="Restart the server and reload this page">Restart</button>
       <button id="btn-stop" class="btn btn--danger-soft" type="button"
         title="Stop the server until a new Claude Code session or start-office.ps1">Stop</button>
@@ -127,6 +128,27 @@
       </section>
     </aside>
   </div>
+  <dialog id="settings-dialog" class="dialog" aria-labelledby="settings-title" aria-describedby="settings-lead">
+    <form method="dialog" class="dialog-form" id="settings-form" novalidate>
+      <header class="dialog-head">
+        <h2 id="settings-title">Pengaturan</h2>
+        <button class="icon-btn icon-btn--sm" id="settings-close" type="button" aria-label="Tutup pengaturan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      </header>
+      <div class="dialog-body">
+        <label class="dialog-label" for="settings-root">Folder induk</label>
+        <p class="dialog-lead" id="settings-lead">Setiap sub-folder di dalamnya menjadi satu pilihan Folder di dock. Folder baru muncul tanpa restart.</p>
+        <input class="dialog-input" id="settings-root" type="text" spellcheck="false" autocomplete="off" placeholder="C:\projects" aria-describedby="settings-source settings-status">
+        <p class="dialog-source" id="settings-source"></p>
+        <p class="dialog-status" id="settings-status" role="status" aria-live="polite" data-kind=""></p>
+      </div>
+      <footer class="dialog-foot">
+        <button class="btn btn--secondary" id="settings-reset" type="button">Kembalikan ke bawaan</button>
+        <span class="dialog-spacer"></span>
+        <button class="btn btn--secondary" id="settings-cancel" type="button">Batal</button>
+        <button class="btn btn--primary" id="settings-save" type="submit">Simpan</button>
+      </footer>
+    </form>
+  </dialog>
   <script src="/js/roles-shared.js"></script>
   <script src="/js/mentions.js"></script>
   <script src="/js/tasks.js"></script>
@@ -148,6 +170,7 @@
   <script src="/js/session.js"></script>
   <script src="/js/tasklist.js"></script>
   <script src="/js/dock.js"></script>
+  <script src="/js/settings.js"></script>
   <script src="/js/net.js"></script>
 </body>
 

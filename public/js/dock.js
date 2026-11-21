@@ -104,7 +104,7 @@ function refreshHint() {
   let text = '', kind = '';
   if (dock.error) { text = dock.error; kind = 'error'; }
   else if (!dock.live) { text = 'Menunggu koneksi server…'; kind = 'error'; }
-  else if (realMode() && !dock.folder) { text = 'Belum ada folder kerja di server (atur AGENT_OFFICE_WORKSPACES).'; kind = 'error'; }
+  else if (realMode() && !dock.folder) { text = 'Belum ada folder kerja. Pilih folder induk di Pengaturan (ikon gerigi) atau atur AGENT_OFFICE_WORKSPACES di server.'; kind = 'error'; }
   else if (dock.success) { text = dock.success; kind = 'ok'; }
   else {
     const { ids, resolved } = currentTargets();
@@ -344,10 +344,11 @@ function makeMenu(btn, list, build, onPick) {
     btn.setAttribute('aria-expanded', 'false');
     if (returnFocus) btn.focus();
   }
+  const pick = (token) => { onPick(token); hide(true); };
   function show() {
     for (const other of document.querySelectorAll('.popover--menu')) if (other !== list) other.hidden = true;
     list.textContent = '';
-    build(list, (token) => { onPick(token); hide(true); });
+    build(list, pick);
     list.hidden = false;
     btn.setAttribute('aria-expanded', 'true');
     const sel = options().findIndex((o) => o.getAttribute('aria-selected') === 'true');
@@ -366,6 +367,8 @@ function makeMenu(btn, list, build, onPick) {
     else if (e.key === 'Tab') hide(false);
   });
   document.addEventListener('mousedown', (e) => { if (!list.hidden && !list.contains(e.target) && !btn.contains(e.target)) hide(false); });
+  // the data behind an open list changed: draw it again and keep the highlighted row
+  return () => { if (list.hidden) return; const keep = active; list.textContent = ''; build(list, pick); mark(keep); };
 }
 
 function menuOption(list, id, label, { selected, disabled, why, onClick }) {
@@ -383,19 +386,37 @@ function menuOption(list, id, label, { selected, disabled, why, onClick }) {
   return li;
 }
 
-makeMenu(folderBtn, document.getElementById('folder-list'), (list, pick) => {
+const rebuildFolderMenu = makeMenu(folderBtn, document.getElementById('folder-list'), (list, pick) => {
   folderList().forEach((f, i) => menuOption(list, 'folder-opt-' + i, f, { selected: f === dock.folder, onClick: () => pick(f) }));
   const rule = document.createElement('li');
   rule.className = 'rule';
   rule.setAttribute('role', 'presentation');
   list.append(rule);
-  // the setting of the parent folder arrives with the settings dialog (a later phase)
-  menuOption(list, 'folder-opt-settings', 'Ubah folder induk…', { disabled: true, why: 'segera', onClick: () => {} });
+  menuOption(list, 'folder-opt-settings', 'Ubah folder induk…', {
+    onClick: () => { list.hidden = true; folderBtn.setAttribute('aria-expanded', 'false'); openSettings(folderBtn); },
+  });
 }, (f) => { dock.folder = f; document.getElementById('dock-folder-name').textContent = f; });
 
 makeMenu(runnerBtn, document.getElementById('runner-list'), (list, pick) => {
   runnerList().forEach((r, i) => menuOption(list, 'runner-opt-' + i, r.id, { selected: r.id === dock.runner, disabled: !r.ok, why: r.ok ? '' : 'tidak tersedia · ' + r.why, onClick: () => pick(r.id) }));
 }, (r) => { dock.runner = r; document.getElementById('dock-runner-name').textContent = r; });
+
+// Opening the list asks the server again, so a project folder made a minute ago is there without a restart.
+folderBtn.addEventListener('click', async () => {
+  if (!realMode()) return;
+  const r = await api('GET', '/workspaces');
+  if (r.status !== 200 || !r.data || !Array.isArray(r.data.workspaces)) return;
+  if (JSON.stringify(r.data.workspaces) === JSON.stringify(session.workspaces)) return;
+  session.workspaces = r.data.workspaces;
+  rebuildFolderMenu();
+});
+
+// The list of folders changed (a new parent folder was chosen): keep the choice if it is still there, else take the first one.
+function foldersChanged() {
+  if (realMode() && !folderList().includes(dock.folder)) dock.folder = folderList()[0] || '';
+  document.getElementById('dock-folder-name').textContent = dock.folder || '—';
+  refreshHint();
+}
 
 // ---- real mode: the lists and defaults come from the server, and the "simulation" notice goes away
 const dockSimEl = document.getElementById('dock-sim');

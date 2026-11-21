@@ -47,7 +47,7 @@ async function startServer(extraEnv = {}) {
   const child = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
     cwd: ROOT,
     // The token file lives in the throwaway dir too: a test must never create or read the real one in the user's profile.
-    env: { ...process.env, AGENT_OFFICE_PORT: String(port), AGENT_OFFICE_DATA_DIR: dataDir, AGENT_OFFICE_TOKEN_FILE: path.join(dataDir, 'token'), AGENT_OFFICE_AUTO_STOP: '0', AGENT_OFFICE_RUNNER: '', AGENT_OFFICE_WORKSPACES: '', ...extraEnv },
+    env: { ...process.env, AGENT_OFFICE_PORT: String(port), AGENT_OFFICE_DATA_DIR: dataDir, AGENT_OFFICE_TOKEN_FILE: path.join(dataDir, 'token'), AGENT_OFFICE_SETTINGS_FILE: path.join(dataDir, 'settings.json'), AGENT_OFFICE_HOME: path.join(dataDir, 'no-home'), AGENT_OFFICE_ROOTS: dataDir, AGENT_OFFICE_AUTO_STOP: '0', AGENT_OFFICE_RUNNER: '', AGENT_OFFICE_WORKSPACES: '', ...extraEnv },
     stdio: 'ignore',
     windowsHide: true,
   });

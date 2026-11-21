@@ -93,6 +93,10 @@ $env:AGENT_OFFICE_WORKSPACES = "agent-office=C:\projects\agent-office;docs=C:\pr
 powershell -File stop-office.ps1; powershell -File start-office.ps1   # restart so the server sees them
 ```
 
+Instead of a fixed list you can leave `AGENT_OFFICE_WORKSPACES` out: then every sub-folder of a **parent folder** is a folder to work in. Pick
+the parent folder in **Pengaturan** (the gear in the header, or "Ubah folder induk…" in the Folder menu), or set `AGENT_OFFICE_ROOTS`; until
+you do there is no folder to run in. This checkout itself is never offered. New project folders show up without a restart.
+
 The dock then lists those folders and runners, tasks come from the server, and a card can show the program's output and cancel it.
 `claude` runs read-only (`--permission-mode plan`) unless `AGENT_OFFICE_RUNNER_PERMISSION` says otherwise. Read
 [SECURITY.md](SECURITY.md) first: this is the one feature that runs programs for you.

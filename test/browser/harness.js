@@ -46,7 +46,7 @@ async function launch() {
   const tokenFile = path.join(dataDir, 'token');
   const server = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
     env: {
-      ...process.env, AGENT_OFFICE_PORT: String(port), AGENT_OFFICE_DATA_DIR: dataDir, AGENT_OFFICE_AUTO_STOP: '0', AGENT_OFFICE_TOKEN_FILE: tokenFile,
+      ...process.env, AGENT_OFFICE_PORT: String(port), AGENT_OFFICE_DATA_DIR: dataDir, AGENT_OFFICE_AUTO_STOP: '0', AGENT_OFFICE_TOKEN_FILE: tokenFile, AGENT_OFFICE_SETTINGS_FILE: path.join(dataDir, 'settings.json'), AGENT_OFFICE_HOME: path.join(dataDir, 'no-home'), AGENT_OFFICE_ROOTS: dataDir,
       AGENT_OFFICE_RUNNER: 'custom', AGENT_OFFICE_RUNNER_CMD: process.execPath, AGENT_OFFICE_RUNNER_ARGS: JSON.stringify([path.join(ROOT, 'test', 'fixtures', 'fake-runner.js')]), AGENT_OFFICE_WORKSPACES: 'w=' + workDir,
     },
     stdio: 'ignore',
