@@ -26,9 +26,8 @@ directly. Please do not post details in a public issue first.
 The page can send a prompt to the server, which runs it as a program on this PC. That is the one thing in Agent Office that does more
 than show activity, so it is **off by default** and strict when on.
 
-- **Off unless you switch it on** in the server's environment: `AGENT_OFFICE_RUNNER=claude` (or `custom`), and at least one folder in
-  `AGENT_OFFICE_WORKSPACES=name=C:\path;other=D:\path`. Without both, `POST /prompts` answers 409 and the page stays a viewer with the
-  simulation.
+- **Off unless you switch it on** in the server's environment: `AGENT_OFFICE_RUNNER=claude` (or `custom`), and at least one folder (see
+  **Which folders** below). Without the runner, `POST /prompts` answers 409 and the page stays a viewer with the simulation.
 - **Login with a per-user token.** The server makes a random 256-bit token in `%LOCALAPPDATA%\AgentOffice\token` (or
   `AGENT_OFFICE_TOKEN_FILE`), readable by your account. `start-office.ps1` and the desktop app open the page with the token in the
   address fragment (`/#token=...`); the page posts it to `/auth`, removes it from the address bar and receives a session cookie
@@ -36,7 +35,7 @@ than show activity, so it is **off by default** and strict when on.
   new one, and a server restart ends all of them, so a cookie that leaks stops working soon. The token itself is never in a cookie or in
   an HTTP request line. Other Windows accounts cannot read your profile, so they cannot log in. There is deliberately no lockout after
   wrong tokens: 256 bits cannot be guessed, and a lockout would only let any local process keep you out.
-- **What needs the login:** `POST /prompts`, `GET /tasks`, `GET /tasks/:id/output`, `POST /tasks/:id/cancel`, the `tasks` in the
+- **What needs the login:** `POST /prompts`, `GET /tasks`, `GET /tasks/:id/output`, `POST /tasks/:id/cancel`, `GET /workspaces`, `GET /settings`, `POST /settings/check` and `/settings/root`, the `tasks` in the
   event stream (a stream is closed when its session ends), and, while the runner is on, `POST /control/stop` and `/control/restart`
   (they end every running task; `stop-office.ps1` falls back to stopping the process). `/state` and anonymous streams never contain prompts or tasks. Writes still need `X-Agent-Office: 1` and the
   Host/Origin/Sec-Fetch checks, so another web page cannot use your cookie.
@@ -50,6 +49,28 @@ than show activity, so it is **off by default** and strict when on.
   a prompt can then change files in the chosen folder.
   Checked against a real `claude` (2026-11-21): in `plan` mode a run in a test folder read a file, answered, exited 0 and changed nothing.
   The edit modes (`acceptEdits`, `auto`, `dontAsk`) have only been exercised with the stand-in program so far.
+- **Which folders.** The page names a folder only by id; the server turns the id into a path and checks it again at every run.
+  The folders come from one of these, strongest first: (1) `AGENT_OFFICE_WORKSPACES=name=C:\path;other=D:\path`, a fixed list that
+  the page cannot change; (2) a **parent folder chosen in the Settings dialog** (saved in `%LOCALAPPDATA%\AgentOffice\settings.json`, or
+  `AGENT_OFFICE_SETTINGS_FILE`, outside the repository); (3) the first entry of `AGENT_OFFICE_ROOTS`. **By default there are none**: until
+  you choose a parent folder, the dock has no folder to run in. With (2) and (3) every ordinary sub-folder of the parent folder is a
+  workspace (not names that start with a dot, `node_modules`, links, more than 200, or **this checkout**, so a prompt cannot edit
+  `hook.js` and friends, which Claude Code runs in every session). In `plan` mode a run is read-only; with an edit mode it is not, so
+  choose a parent folder that holds only what you want to expose, or use a fixed list.
+  **Choosing the folder is a power of the login.** Anyone holding the session cookie can point the runner at another parent folder
+  (the accepted risk of a replayed cookie, see below, now includes that). If you do not want the page to have it, set
+  `AGENT_OFFICE_WORKSPACES`: the choice is then locked and the dialog is read-only.
+  A chosen parent folder must be a real folder you can read. It is refused as `too_broad` when it is a drive root, a system folder, the
+  home folder or anything above it, another profile (`C:\Users\*`), `AppData`, `Documents`, `Desktop`, `Downloads` or `OneDrive` of the home folder,
+  or anything inside a folder whose name starts with a dot (`.ssh`, `.aws`). Paths are compared by their real, long name (the native
+  `realpath`), so a short 8.3 spelling such as `C:\PROGRA~1` gets no further than the long one. A UNC or device path (`\\host\share`) is refused
+  before the disk is touched, so the server never contacts another machine for it. A sub-folder swapped for a link that leads out of
+  the parent folder is refused at run time. At most 5000 entries of a folder are read, `POST /settings/check` is limited to 60 a
+  minute, and it answers only a code and, for an acceptable folder, a count. The path is only ever sent in a POST body.
+  The settings file is trusted like the token file: another process of your own account can edit it (and can read the token anyway).
+  A file that cannot be read or understood means **no folders** (not a wider default) until a folder is chosen again.
+  Between the run-time check and the start of the program a folder could still be swapped for a link by someone who can write to the
+  parent folder; that needs the access this program already trusts you with. The dialog only lists and chooses folders; it never runs anything.
 - **Limits:** one running task per desk, 3 programs at once, 10 minutes each (the whole process tree is killed; a program that does
   not end after the kill is given up after 8 seconds), 40 open tasks in all, 64 KiB of output kept, 4000 characters per prompt, 20
   prompts a minute, 40 desks per prompt (each desk is a separate run of the prompt, which costs API usage). The office does not
@@ -58,7 +79,8 @@ than show activity, so it is **off by default** and strict when on.
   `AGENT_OFFICE_RUNNER_ENV`), plus `AGENT_OFFICE_PORT` and `AGENT_OFFICE_DATA_DIR` (not secrets) so hooks inside a task report to this
   office. Every other `AGENT_OFFICE_*` setting and variable of the server is left out.
 - **Hooks of the folder:** `claude -p` does not ask whether to trust a folder, so hooks in that folder's `.claude/settings.json` run.
-  Only list folders you trust in `AGENT_OFFICE_WORKSPACES`.
+  Only offer folders you trust, whether in `AGENT_OFFICE_WORKSPACES` or as the sub-folders of a parent folder: a repository cloned next to your
+  projects becomes a place a prompt can run its hooks.
 - **Stopping:** Stop, Restart and a normal exit end every program the server started. If the server process is killed hard
   (`taskkill /F`, a crash), a running program may outlive it until it finishes or reaches its timeout.
 - Only `claude` and a `custom` program (`AGENT_OFFICE_RUNNER_CMD` absolute path, `AGENT_OFFICE_RUNNER_ARGS` JSON array) exist for now; the
@@ -98,5 +120,7 @@ than show activity, so it is **off by default** and strict when on.
 
 - `AGENT_OFFICE_RUNNER`, `AGENT_OFFICE_WORKSPACES`, `AGENT_OFFICE_RUNNER_PERMISSION`, `AGENT_OFFICE_RUNNER_CMD`, `AGENT_OFFICE_RUNNER_ARGS`,
   `AGENT_OFFICE_RUNNER_ENV`, `AGENT_OFFICE_TOKEN_FILE`: see above. The server must be restarted to pick them up.
+- `AGENT_OFFICE_ROOTS` (parent folder of the workspaces), `AGENT_OFFICE_SETTINGS_FILE` (where the page saves its choice) and `AGENT_OFFICE_HOME` (which
+  folder counts as the home folder in the `too_broad` check; for tests and unusual layouts): see **Which folders**.
 - `AGENT_OFFICE_PORT` changes the port. `AGENT_OFFICE_DATA_DIR` moves the log and the stop marker.
 - `GET /health` reports liveness without exposing event content.

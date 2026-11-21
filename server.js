@@ -14,6 +14,7 @@ const { rotateIfLarge } = require('./lib/logfile');
 const { pageCsp, applyBaseHeaders } = require('./lib/security');
 const { loadOrCreateToken, createAuth } = require('./lib/auth');
 const { createWorkspaces } = require('./lib/workspaces');
+const { createSettings } = require('./lib/settings');
 const { buildRunners, runnersView, createExecutor, MAX_CONCURRENT } = require('./lib/runner');
 const Tasks = require('./public/js/tasks');
 const Mentions = require('./public/js/mentions');
@@ -50,12 +51,22 @@ const isAuthed = (req) => auth !== null && auth.isAuthed(req);
 
 const taskStore = Tasks.createStore();
 const runners = buildRunners();
-const workspaces = createWorkspaces();
+const settings = createSettings();
+const workspaces = createWorkspaces({ settings, exclude: [__dirname] }); // no folders until a parent folder is chosen; this checkout is never one
 for (const note of workspaces.skipped) console.log('Workspace skipped: ' + note);
 const executor = createExecutor({ store: taskStore, runners, workspaces, onChange: () => broadcast() });
 const taskView = (t) => ({ id: t.id, batchId: t.batchId, deskId: t.deskId, text: t.text, workspaceId: t.workspaceId, runner: t.runner, status: t.status, createdAt: t.createdAt, startedAt: t.startedAt, finishedAt: t.finishedAt, exitCode: t.exitCode, error: t.error });
 const realEnabled = () => [...runners.values()].some((r) => r.ok);
 const promptTimes = [];
+const checkTimes = [];
+// the folder check reads the disk for whoever asks: a few a second is plenty for typing in the dialog
+function takeCheckQuota() {
+  const now = Date.now();
+  while (checkTimes.length && now - checkTimes[0] > 60000) checkTimes.shift();
+  if (checkTimes.length >= 60) return false;
+  checkTimes.push(now);
+  return true;
+}
 
 function sessionView() {
   return { app: 'agent-office', schema: 1, authed: true, real: realEnabled(), runners: runnersView(runners), workspaces: workspaces.list(), maxConcurrent: MAX_CONCURRENT };
@@ -300,7 +311,7 @@ const TASK_ID = /^\/tasks\/(t\d{1,9})\/(output|cancel)$/;
 function handleTaskRoutes(req, res) {
   const url = req.url;
   const isPost = req.method === 'POST';
-  if (!(url === '/auth' || url === '/session' || url === '/prompts' || url === '/tasks' || TASK_ID.test(url))) return false;
+  if (!(url === '/auth' || url === '/session' || url === '/prompts' || url === '/tasks' || url === '/workspaces' || url === '/settings' || url === '/settings/check' || url === '/settings/root' || TASK_ID.test(url))) return false;
   if (isPost && req.headers['x-agent-office'] !== '1') return res.writeHead(403).end(), true;
 
   if (isPost && url === '/auth') {
@@ -322,6 +333,27 @@ function handleTaskRoutes(req, res) {
 
   // From here on: logged in only.
   if (!isAuthed(req)) return json(res, 401, { error: 'login_required' }), true;
+
+  // The parent folder of the workspaces. Ids and labels go to any logged-in page; the path itself only in /settings.
+  if (req.method === 'GET' && url === '/workspaces') { json(res, 200, { workspaces: workspaces.list() }); return true; }
+  if (req.method === 'GET' && url === '/settings') { json(res, 200, { root: workspaces.info() }); return true; }
+  if (isPost && (url === '/settings/check' || url === '/settings/root')) {
+    readBody(req, res, (body) => {
+      let data;
+      try { data = JSON.parse(body); } catch { return json(res, 400, { error: 'bad_request' }); }
+      if (!data || typeof data !== 'object' || !('path' in data) || (data.path !== null && typeof data.path !== 'string')) return json(res, 400, { error: 'bad_request' });
+      if (url === '/settings/check') {
+        if (!takeCheckQuota()) return json(res, 429, { error: 'too_many_checks' });
+        if (data.path === null) return json(res, 400, { error: 'bad_request' });
+        const r = workspaces.check(data.path);
+        return json(res, r.ok ? 200 : 422, r);
+      }
+      const r = workspaces.setRoot(data.path);
+      if (!r.ok) return json(res, r.error === 'locked_by_env' ? 409 : r.error === 'not_saved' ? 500 : 422, r);
+      json(res, 200, { ok: true, root: workspaces.info(), workspaces: workspaces.list() });
+    });
+    return true;
+  }
 
   if (req.method === 'GET' && url === '/tasks') { json(res, 200, { tasks: taskStore.tasks.map(taskView) }); return true; }
 

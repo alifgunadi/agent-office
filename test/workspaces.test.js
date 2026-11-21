@@ -17,7 +17,7 @@ describe('workspaces', () => {
     const w = make(`one=${a};two=${b}`);
     assert.deepEqual(w.list(), [{ id: 'one', label: 'one' }, { id: 'two', label: 'two' }]);
     assert.ok(!JSON.stringify(w.list()).includes(a));
-    assert.equal(w.resolve('one'), fs.realpathSync(a));
+    assert.equal(w.resolve('one'), fs.realpathSync.native(a));
   });
 
   it('is empty when nothing is configured', () => {

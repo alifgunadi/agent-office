@@ -127,7 +127,7 @@ describe('runner: running a task', () => {
     assert.ok(s.changes.length > 0, 'listeners are told');
     const [c] = s.send('cwd');
     await until(() => c.status === 'done');
-    assert.equal(fs.realpathSync(s.exec.output(c.id).trim()), fs.realpathSync(s.dir));
+    assert.equal(fs.realpathSync.native(s.exec.output(c.id).trim()), fs.realpathSync.native(s.dir));
   });
 
   it('the arguments are the fixed ones; nothing of the prompt is in them', async () => {
