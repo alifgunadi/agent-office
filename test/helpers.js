@@ -41,9 +41,11 @@ function request(port, method, urlPath, { body, headers = {} } = {}) {
   });
 }
 
-async function startServer(extraEnv = {}) {
+// options.dataDir: reuse a folder (a second server over the files of a first one); the caller removes it. options.prepare(dataDir) runs before the server starts.
+async function startServer(extraEnv = {}, options = {}) {
   const port = await freePort();
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-test-'));
+  const dataDir = options.dataDir || fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-test-'));
+  if (options.prepare) options.prepare(dataDir);
   const child = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
     cwd: ROOT,
     // The token file lives in the throwaway dir too: a test must never create or read the real one in the user's profile.
@@ -63,6 +65,7 @@ async function startServer(extraEnv = {}) {
     port,
     dataDir,
     exit,
+    kill: () => { child.kill(); return new Promise((resolve) => (child.exitCode !== null ? resolve() : child.once('exit', resolve))); },
     token: () => fs.readFileSync(path.join(dataDir, 'token'), 'utf8').trim(),
     request: (method, urlPath, opts) => request(port, method, urlPath, opts),
     event: (body) => request(port, 'POST', '/event', { body, headers: header }),
@@ -70,7 +73,7 @@ async function startServer(extraEnv = {}) {
     async stop() {
       child.kill();
       await new Promise((resolve) => (child.exitCode !== null ? resolve() : child.once('exit', resolve)));
-      fs.rmSync(dataDir, { recursive: true, force: true });
+      if (!options.dataDir) fs.rmSync(dataDir, { recursive: true, force: true });
     },
   };
 }
