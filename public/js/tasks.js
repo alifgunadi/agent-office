@@ -15,7 +15,7 @@
   const DONE_SHOWN_MS = 8000;  // a desk shows "done" this long after its task finished, then goes back to idle
 
   const ACTIVE = ['running', 'waiting_input'];
-  const FINISHED = ['done', 'failed', 'cancelled'];
+  const FINISHED = ['done', 'failed', 'cancelled', 'interrupted']; // interrupted: the server went away while it was open
 
   const hash = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return Math.abs(h); };
 
@@ -127,7 +127,7 @@
     };
   }
 
-  // The filters of the task list: Aktif = running; Menunggu = queued + waiting for input; Selesai = done + failed + cancelled.
+  // The filters of the task list: Aktif = running; Menunggu = queued + waiting for input; Selesai = done + failed + cancelled + interrupted.
   function filterTasks(store, filter) {
     const pick = {
       all: () => true,

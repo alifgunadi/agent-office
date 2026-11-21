@@ -223,7 +223,7 @@ function afterInput() {
   refreshHint();
 }
 
-dockInput.addEventListener('input', () => { expandDock(); afterInput(); openMention(); });
+dockInput.addEventListener('input', () => { expandDock(); afterInput(); openMention(); saveDockDraftSoon(); });
 dockInput.addEventListener('focus', expandDock);
 dockInput.addEventListener('click', openMention);
 dockInput.addEventListener('keyup', (e) => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) openMention(); });
@@ -282,7 +282,7 @@ async function sendReal(text, ids, resolved) {
   } else {
     setError(REAL_ERRORS[r.data && r.data.error] || 'Tugas ditolak server (HTTP ' + r.status + ').');
   }
-  if (!dock.error) { dockInput.value = ''; dock.chips = []; renderChips(); autosize(); }
+  if (!dock.error) { dockInput.value = ''; dock.chips = []; renderChips(); autosize(); saveDockPrefs(); }
   syncControls();
 }
 
@@ -318,7 +318,7 @@ function finishSend(text, ids) {
     }
     if (!r.tasks.length && !r.rejected.length) setError('Tidak ada target yang bisa menerima tugas.');
   }
-  if (!dock.error) { dockInput.value = ''; dock.chips = []; renderChips(); autosize(); }
+  if (!dock.error) { dockInput.value = ''; dock.chips = []; renderChips(); autosize(); saveDockPrefs(); }
   syncControls();
   tasksChanged();
 }
@@ -395,11 +395,11 @@ const rebuildFolderMenu = makeMenu(folderBtn, document.getElementById('folder-li
   menuOption(list, 'folder-opt-settings', 'Ubah folder induk…', {
     onClick: () => { list.hidden = true; folderBtn.setAttribute('aria-expanded', 'false'); openSettings(folderBtn); },
   });
-}, (f) => { dock.folder = f; document.getElementById('dock-folder-name').textContent = f; });
+}, (f) => { dock.folder = f; document.getElementById('dock-folder-name').textContent = f; saveDockPrefs(); });
 
 makeMenu(runnerBtn, document.getElementById('runner-list'), (list, pick) => {
   runnerList().forEach((r, i) => menuOption(list, 'runner-opt-' + i, r.id, { selected: r.id === dock.runner, disabled: !r.ok, why: r.ok ? '' : 'tidak tersedia · ' + r.why, onClick: () => pick(r.id) }));
-}, (r) => { dock.runner = r; document.getElementById('dock-runner-name').textContent = r; });
+}, (r) => { dock.runner = r; document.getElementById('dock-runner-name').textContent = r; saveDockPrefs(); });
 
 // Opening the list asks the server again, so a project folder made a minute ago is there without a restart.
 folderBtn.addEventListener('click', async () => {
@@ -418,17 +418,44 @@ function foldersChanged() {
   refreshHint();
 }
 
+// ---- what survives a reload: the folder, the runner and the text being typed (kept in this browser only, never sent anywhere)
+const DOCK_KEY = 'agent-office.dock';
+function loadDockPrefs() {
+  try {
+    const v = JSON.parse(localStorage.getItem(DOCK_KEY));
+    if (!v || typeof v !== 'object') return {};
+    return { folder: typeof v.folder === 'string' ? v.folder.slice(0, 80) : '', runner: typeof v.runner === 'string' ? v.runner.slice(0, 40) : '', draft: typeof v.draft === 'string' ? v.draft.slice(0, 4000) : '' };
+  } catch { return {}; }
+}
+const dockPrefs = loadDockPrefs();
+let dockDraftTimer = 0;
+function saveDockPrefs() {
+  clearTimeout(dockDraftTimer);
+  try { localStorage.setItem(DOCK_KEY, JSON.stringify({ folder: dock.folder, runner: dock.runner, draft: dockInput.value.slice(0, 4000) })); } catch { /* storage blocked */ }
+}
+function saveDockDraftSoon() {
+  clearTimeout(dockDraftTimer);
+  dockDraftTimer = setTimeout(saveDockPrefs, 400);
+}
+if (dockPrefs.draft) { dockInput.value = dockPrefs.draft; autosize(); }
+// until the server says otherwise the page is a simulation, whose folders and runners are fixed lists
+if (FOLDERS.includes(dockPrefs.folder)) dock.folder = dockPrefs.folder;
+if (['claude', 'opencode'].includes(dockPrefs.runner)) dock.runner = dockPrefs.runner;
+document.getElementById('dock-folder-name').textContent = dock.folder;
+document.getElementById('dock-runner-name').textContent = dock.runner;
+
 // ---- real mode: the lists and defaults come from the server, and the "simulation" notice goes away
 const dockSimEl = document.getElementById('dock-sim');
 function onRealMode() {
   const real = realMode();
   dockSimEl.hidden = real;
+  // the choice of the last visit comes back when it is still on offer
   if (real) {
-    dock.folder = folderList()[0] || '';
-    dock.runner = (runnerList().find((r) => r.ok) || runnerList()[0] || { id: '' }).id;
+    dock.folder = folderList().includes(dockPrefs.folder) ? dockPrefs.folder : folderList()[0] || '';
+    dock.runner = runnerList().some((r) => r.ok && r.id === dockPrefs.runner) ? dockPrefs.runner : (runnerList().find((r) => r.ok) || runnerList()[0] || { id: '' }).id;
   } else {
-    dock.folder = FOLDERS[0];
-    dock.runner = 'claude';
+    dock.folder = FOLDERS.includes(dockPrefs.folder) ? dockPrefs.folder : FOLDERS[0];
+    dock.runner = ['claude', 'opencode'].includes(dockPrefs.runner) ? dockPrefs.runner : 'claude';
   }
   document.getElementById('dock-folder-name').textContent = dock.folder || '—';
   document.getElementById('dock-runner-name').textContent = dock.runner || '—';

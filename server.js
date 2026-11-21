@@ -9,7 +9,8 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { createOffice } = require('./lib/office');
 const { sanitizeEvent } = require('./lib/sanitize');
-const { STOPPED_MARKER, LOG_PATH } = require('./lib/paths');
+const { STOPPED_MARKER, LOG_PATH, DATA_DIR } = require('./lib/paths');
+const { createTaskFile } = require('./lib/taskfile');
 const { rotateIfLarge } = require('./lib/logfile');
 const { pageCsp, applyBaseHeaders } = require('./lib/security');
 const { loadOrCreateToken, createAuth } = require('./lib/auth');
@@ -50,6 +51,10 @@ try { auth = createAuth(loadOrCreateToken()); } catch (err) { console.error('Cou
 const isAuthed = (req) => auth !== null && auth.isAuthed(req);
 
 const taskStore = Tasks.createStore();
+// The task list survives a restart: what was open then comes back as "interrupted" (lib/taskfile.js).
+const taskFile = createTaskFile({ file: path.join(DATA_DIR, 'agent-office-tasks.json'), store: taskStore });
+const restoredTasks = taskFile.load();
+if (restoredTasks) console.log('Restored ' + restoredTasks + ' task(s).');
 const runners = buildRunners();
 const settings = createSettings();
 const workspaces = createWorkspaces({ settings, exclude: [__dirname] }); // no folders until a parent folder is chosen; this checkout is never one
@@ -88,6 +93,7 @@ function scheduleShutdown(reason) {
 }
 
 function broadcast() {
+  taskFile.touch(); // a no-op unless the tasks changed, and then one write after a short delay
   const snap = office.snapshot();
   const plain = `data: ${JSON.stringify(snap)}\n\n`;
   let withTasks = null;
@@ -110,6 +116,7 @@ setInterval(() => office.sweepDesks(), STALE_DESK_CHECK_MS).unref();
 function shutdown(reason) {
   console.log(`[${new Date().toISOString()}] Agent Office stopped (${reason}).`);
   executor.shutdown();
+  taskFile.flush();
   server.close();
   for (const res of clients.keys()) res.end();
   setTimeout(() => process.exit(0), 100);
@@ -128,6 +135,7 @@ function restart() {
   console.log(`[${new Date().toISOString()}] Restart requested.`);
   // Release the port first; the new process retries listen until it is free.
   executor.shutdown();
+  taskFile.flush();
   server.close();
   let out = 'ignore';
   rotateIfLarge(LOG_PATH);
@@ -427,6 +435,9 @@ server.on('error', (err) => {
   else console.error(err);
   process.exit(1);
 });
+
+// Ctrl+C or a termination request: save the task list and end the programs instead of vanishing.
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => shutdown(sig));
 
 server.listen(PORT, HOST, () => {
   console.log(`Agent Office running at http://${HOST}:${PORT}`);

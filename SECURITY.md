@@ -71,6 +71,15 @@ than show activity, so it is **off by default** and strict when on.
   A file that cannot be read or understood means **no folders** (not a wider default) until a folder is chosen again.
   Between the run-time check and the start of the program a folder could still be swapped for a link by someone who can write to the
   parent folder; that needs the access this program already trusts you with. The dialog only lists and chooses folders; it never runs anything.
+- **The task list on disk.** So that a restart does not make the Tasks tab forget, the server keeps the task list (ids, desk, folder id,
+  runner, status, times, exit code, a short error and **the prompt text**, but never the output) in `agent-office-tasks.json` in the data
+  folder (`AGENT_OFFICE_DATA_DIR`, by default the temp folder of your account), created readable by you only where the system knows modes.
+  It is written at most twice a second and when the server stops. Because it holds your prompts, treat it like the log: delete it to
+  forget them. What is read back is checked field by field (ids, statuses, lengths; unknown fields and odd values are dropped), tasks
+  older than a week and anything over 100 tasks or 1 MiB are not kept, and a task that was queued or running when the server went away
+  comes back as "interrupted": nothing is run again after a restart. A file that cannot be read or understood is set aside as `.bad` with a
+  warning, and a disk that is full or locked only produces a warning. The page also keeps its Folder, its Runner and the text you were
+  typing in this browser's `localStorage` (`agent-office.dock`, never sent anywhere; it is shown as text, never as markup).
 - **Limits:** one running task per desk, 3 programs at once, 10 minutes each (the whole process tree is killed; a program that does
   not end after the kill is given up after 8 seconds), 40 open tasks in all, 64 KiB of output kept, 4000 characters per prompt, 20
   prompts a minute, 40 desks per prompt (each desk is a separate run of the prompt, which costs API usage). The office does not

@@ -15,7 +15,7 @@ const taskListEl = document.getElementById('task-list');
 const tasksEmptyEl = document.getElementById('tasks-empty');
 const STATUS_BADGE = {
   queued: ['Antre', 'queued'], running: ['Berjalan', 'running'], waiting_input: ['Butuh Input', 'waiting'],
-  done: ['Selesai', 'done'], failed: ['Gagal', 'failed'], cancelled: ['Dibatalkan', 'queued'],
+  done: ['Selesai', 'done'], failed: ['Gagal', 'failed'], cancelled: ['Dibatalkan', 'queued'], interrupted: ['Terputus', 'failed'],
 };
 const EMPTY_TEXT = {
   all: 'Belum ada tugas aktif. Klik meja agent atau ketik @mention di bawah untuk mulai.',
