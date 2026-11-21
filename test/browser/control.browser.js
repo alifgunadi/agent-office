@@ -17,9 +17,9 @@ module.exports = [
   {
     name: 'control: every desk front and the lounge can be reached from AlifGunadi\'s seat in all three layouts',
     async run(page) {
-      for (const [w, h] of [[1440, 900], [1100, 800], [1024, 768]]) {
+      for (const [w, h] of [[1440, 900], [800, 700], [600, 700]]) {
         await page.viewport(w, h);
-        await page.waitFor(`layout && layout.cols === ${w === 1440 ? 0 : w === 1100 ? 3 : 2}`);
+        await page.waitFor(`layout && layout.cols === ${w === 1440 ? 0 : w === 800 ? 3 : 2}`);
         const r = JSON.parse(await val(page, `JSON.stringify((() => {
           const nav = layoutNav(layout), me = layout.byId.get('main'), s = deskSeat(me), bad = [];
           for (const p of layout.places) {
@@ -201,7 +201,7 @@ module.exports = [
       const f = await val(page, FLOOR);
       await clickWorld(page, f[0], f[1]);
       await page.waitFor(`mainAgent().man`);
-      await page.viewport(1024, 768, { reducedMotion: true });
+      await page.viewport(600, 700, { reducedMotion: true });
       await page.waitFor(`layout.cols === 2`);
       await page.waitFor(`!mainAgent().man`);
       assert.equal(await val(page, `mainAgent().s`), 0);

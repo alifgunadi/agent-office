@@ -879,39 +879,281 @@ aside {
   border-color: var(--color-danger-border);
 }
 
-/* Tablet and phone layouts come with a later phase; until then the panel goes below the stage. */
-@media (max-width: 900px) {
-  body {
-    height: auto;
-    min-height: 100vh;
-    min-height: 100dvh;
-  }
+/* ---------- tablet and phone ----------
+   Wide (above 1100px): the side panel sits beside the stage. Tablet (901-1100px): the panel goes below the stage, the task cards scroll
+   sideways, the camera is a one-line bar. Phone (900px and below): the panel is a bottom sheet with a peek, the zone legend folds into one
+   chip, the controls of the top bar move into a menu, and a chip picks a desk instead of tapping a tiny one. */
 
+.menu-wrap,
+.legend-toggle,
+.focus-wrap,
+.sheet-handle,
+.task-pos {
+  display: none;
+}
+
+.side-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.menu-wrap {
+  position: relative;
+}
+
+.menu-pop {
+  right: 0;
+  left: auto;
+  bottom: auto;
+  top: calc(100% + var(--space-1));
+  min-width: 240px;
+  z-index: 40;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: var(--ctl-44);
+  padding: 0 var(--space-3);
+  font: inherit;
+  font-size: var(--fs-13);
+  font-weight: 700;
+  color: var(--color-ink);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-8);
+  cursor: pointer;
+}
+
+.menu-item:hover { background: var(--color-wash); }
+.menu-item.is-danger { color: var(--color-danger-fg); }
+.menu-item[aria-checked]::after { content: ""; width: 18px; height: 18px; border: 2px solid var(--color-control-border); border-radius: 4px; }
+.menu-item[aria-checked="true"]::after { background: var(--color-focus); border-color: var(--color-focus); }
+
+.menu-pop .confirm-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  font-size: var(--fs-13);
+  line-height: var(--lh-16);
+  font-weight: 700;
+}
+
+.menu-pop .confirm-row div {
+  display: flex;
+  gap: var(--space-2);
+}
+
+@media (max-width: 1100px) {
   .workspace {
     flex-direction: column;
   }
 
-  main {
-    flex: 1 0 auto;
-  }
-
-  .stage-wrap {
-    flex: 1 0 auto;
-  }
-
   aside {
     width: auto;
-    max-height: 40vh;
-    flex: 0 0 auto;
+    height: 308px;
+    flex: none;
     border-left: 0;
     border-top: 1px solid var(--color-line);
   }
 
-  .me-card,
-  .legend,
-  .camera-card,
+  /* the task cards in one row that scrolls sideways, a card at a time */
+  #panel-tasks {
+    position: relative;
+  }
+
+  .task-list {
+    flex-direction: row;
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+    padding-bottom: var(--space-1);
+  }
+
+  .task-card {
+    flex: 0 0 min(300px, 78%);
+    scroll-snap-align: start;
+    overflow: hidden;
+  }
+
+  .task-pos {
+    display: block;
+    margin: var(--space-1) 0 0;
+    text-align: right;
+    font-size: var(--fs-12);
+    line-height: var(--lh-16);
+    font-weight: 700;
+    color: var(--color-muted);
+  }
+
+  .filters {
+    margin-bottom: var(--space-2);
+  }
+
+  /* the camera: one bar of 52px with turn and zoom; the minimap, the compass, the slider and the wall modes stay out of the way */
+  .camera-card {
+    top: var(--space-3);
+    right: var(--space-4);
+    width: auto;
+    height: 52px;
+    padding: 0 var(--space-3);
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+    border-radius: var(--radius-pill);
+  }
+
+  .camera-card .camera-head {
+    order: 2;
+  }
+
+  .camera-card .camera-title,
+  .camera-card .camera-icon,
+  #camera-min,
+  .compass,
+  .camera-row input[type="range"],
+  #camera-body > div:not(.camera-row),
+  .camera-hint,
   .minimap-card {
+    display: none !important;
+  }
+
+  #camera-body {
+    display: flex !important;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .camera-row {
+    gap: var(--space-1);
+  }
+
+  .camera-card .icon-btn {
+    --size: var(--ctl-44);
+  }
+
+  .camera-head output {
+    min-width: 64px;
+    text-align: center;
+  }
+
+  .legend {
+    max-width: calc(100% - 300px);
+  }
+
+  .dock {
+    padding: var(--space-2);
+  }
+
+  .dock[data-state="compact"] .dock-row {
+    min-height: var(--ctl-44);
+  }
+
+  .dock[data-state="compact"] .dock-field textarea {
+    min-height: var(--ctl-44);
+  }
+
+  .dock[data-state="compact"] .btn--lg {
+    --btn-h: var(--ctl-44);
+  }
+}
+
+@media (max-width: 900px) {
+  .topbar {
+    padding: var(--space-2) var(--space-4);
+    flex-wrap: nowrap;
+  }
+
+  .topbar .controls {
     display: none;
+  }
+
+  .menu-wrap {
+    display: block;
+    margin-left: auto;
+  }
+
+  .topbar h1 {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  main {
+    padding-bottom: 108px; /* the peek of the sheet */
+  }
+
+  .me-card,
+  .camera-card .camera-row:first-child,
+  #camera-readout {
+    display: none;
+  }
+
+  /* the camera bar keeps zoom only (the stacked rooms cannot turn); the desk chip sits next to it */
+  .camera-card {
+    right: var(--space-3);
+  }
+
+  .focus-wrap {
+    display: block;
+    position: absolute;
+    top: calc(var(--space-3) + 52px + var(--space-2));
+    right: var(--space-3);
+    z-index: 5;
+  }
+
+  .focus-btn {
+    --btn-h: var(--ctl-44);
+    box-shadow: var(--shadow-card);
+  }
+
+  .focus-list {
+    right: 0;
+    left: auto;
+    bottom: auto;
+    top: calc(100% + var(--space-1));
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+
+  /* the zone legend folds into one chip */
+  .legend-toggle {
+    display: inline-flex;
+    position: absolute;
+    top: var(--space-3);
+    left: var(--space-3);
+    z-index: 5;
+    height: var(--ctl-44);
+    box-shadow: var(--shadow-card);
+  }
+
+  .legend {
+    display: none;
+    top: calc(var(--space-3) + var(--ctl-44) + var(--space-2));
+    left: var(--space-3);
+    max-width: calc(100% - 2 * var(--space-3));
+    padding: var(--space-2);
+    background: var(--color-paper);
+    border-radius: var(--radius-12);
+    box-shadow: var(--shadow-float);
+    pointer-events: auto;
+  }
+
+  .legend.is-open {
+    display: flex;
+    flex-direction: column;
+    z-index: 6;
   }
 
   .dock {
@@ -929,9 +1171,91 @@ aside {
     order: -1;
   }
 
-  .topbar {
-    padding: var(--space-2) var(--space-4);
+  .dock-at {
+    display: none;
   }
+
+  .dock-field textarea {
+    min-height: var(--ctl-44);
+  }
+
+  .target-chip {
+    height: var(--ctl-44);
+  }
+
+  .target-chip button {
+    width: var(--ctl-44);
+    height: var(--ctl-44);
+  }
+
+  .dock-send {
+    flex: 1;
+  }
+
+  /* the side panel is a sheet over the bottom of the screen: a peek with the grabber and the tabs, opened to most of the height */
+  aside {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    height: min(62dvh, 560px);
+    padding-top: 0;
+    border-top: 1px solid var(--color-line);
+    border-radius: var(--radius-16) var(--radius-16) 0 0;
+    box-shadow: var(--shadow-float);
+    transform: translateY(calc(100% - 108px));
+    transition: transform .2s ease;
+  }
+
+  aside.is-open {
+    transform: translateY(0);
+  }
+
+  aside:not(.is-open) .side-body > :not(.tabs) {
+    visibility: hidden;
+  }
+
+  .sheet-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    height: var(--ctl-44);
+    padding: 0;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+  }
+
+  .sheet-handle span {
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--color-control-border);
+  }
+
+  .task-list {
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .task-card {
+    flex: none;
+  }
+
+  .task-pos {
+    display: none;
+  }
+}
+
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  transition: none !important;
+  animation: none !important;
+  scroll-behavior: auto !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
