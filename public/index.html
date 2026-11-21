@@ -95,6 +95,7 @@
             </div>
             <button class="btn btn--primary btn--lg dock-send" id="dock-send" type="button">Kirim</button>
           </div>
+          <ul class="context-chips" id="context-chips" aria-label="Konteks dari tautan" aria-live="polite" hidden></ul>
           <p class="dock-hint" id="dock-hint" role="status" aria-live="polite"></p>
           <div class="dock-confirm" id="dock-confirm" role="group" aria-label="Konfirmasi" hidden>
             <span id="dock-confirm-text">Kirim tugas ini ke semua 11 agent?</span>
@@ -123,6 +124,7 @@
       <div class="tabs" role="tablist" aria-label="Side panel">
         <button class="tab" id="tab-tasks" role="tab" type="button" aria-selected="false" aria-controls="panel-tasks" tabindex="-1">Tasks <span class="badge badge--count" id="tasks-count" hidden>0</span></button>
         <button class="tab" id="tab-activity" role="tab" type="button" aria-selected="true" aria-controls="panel-activity">Activity</button>
+        <button class="tab" id="tab-context" role="tab" type="button" aria-selected="false" aria-controls="panel-context" tabindex="-1" hidden>Konteks <span class="badge badge--count" id="context-count" hidden>0</span></button>
       </div>
       <section class="panel" id="panel-tasks" role="tabpanel" aria-labelledby="tab-tasks" hidden>
         <div class="filters" role="group" aria-label="Filter tugas">
@@ -134,6 +136,10 @@
         <ul class="task-list" id="task-list" aria-label="Daftar tugas"></ul>
         <p class="task-pos" id="task-pos" aria-live="polite" hidden></p>
         <p class="empty" id="tasks-empty">Belum ada tugas aktif. Klik meja agent atau ketik @mention di bawah untuk mulai.</p>
+      </section>
+      <section class="panel" id="panel-context" role="tabpanel" aria-labelledby="tab-context" hidden>
+        <ul class="context-list" id="context-list" aria-label="Konteks integrasi"></ul>
+        <p class="empty" id="context-empty">Belum ada konteks. Tempel tautan Jira, Figma atau Penpot di prompt; server membacanya (hanya baca) bila tokennya sudah diatur.</p>
       </section>
       <section class="panel" id="panel-activity" role="tabpanel" aria-labelledby="tab-activity">
         <ul id="log" role="log" aria-label="Activity log" aria-live="off"></ul>
@@ -195,6 +201,7 @@
   <script src="/js/tasklist.js"></script>
   <script src="/js/dock.js"></script>
   <script src="/js/settings.js"></script>
+  <script src="/js/context.js"></script>
   <script src="/js/responsive.js"></script>
   <script src="/js/net.js"></script>
 </body>

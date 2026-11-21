@@ -35,7 +35,7 @@ than show activity, so it is **off by default** and strict when on.
   new one, and a server restart ends all of them, so a cookie that leaks stops working soon. The token itself is never in a cookie or in
   an HTTP request line. Other Windows accounts cannot read your profile, so they cannot log in. There is deliberately no lockout after
   wrong tokens: 256 bits cannot be guessed, and a lockout would only let any local process keep you out.
-- **What needs the login:** `POST /prompts`, `GET /tasks`, `GET /tasks/:id/output`, `POST /tasks/:id/cancel`, `GET /workspaces`, `GET /settings`, `POST /settings/check` and `/settings/root`, the `tasks` in the
+- **What needs the login:** `POST /prompts`, `GET /tasks`, `GET /tasks/:id/output`, `POST /tasks/:id/cancel`, `GET /workspaces`, `GET /settings`, `POST /settings/check` and `/settings/root`, `POST /integrations/resolve`, the `tasks` in the
   event stream (a stream is closed when its session ends), and, while the runner is on, `POST /control/stop` and `/control/restart`
   (they end every running task; `stop-office.ps1` falls back to stopping the process). `/state` and anonymous streams never contain prompts or tasks. Writes still need `X-Agent-Office: 1` and the
   Host/Origin/Sec-Fetch checks, so another web page cannot use your cookie.
@@ -71,6 +71,23 @@ than show activity, so it is **off by default** and strict when on.
   A file that cannot be read or understood means **no folders** (not a wider default) until a folder is chosen again.
   Between the run-time check and the start of the program a folder could still be swapped for a link by someone who can write to the
   parent folder; that needs the access this program already trusts you with. The dialog only lists and chooses folders; it never runs anything.
+- **Context from links (Jira, Figma, Penpot).** Off unless a token is set in the server's environment: `JIRA_EMAIL`, `JIRA_API_TOKEN` and
+  `JIRA_SITE` (your own site, e.g. `acme.atlassian.net`), `FIGMA_ACCESS_TOKEN`, `PENPOT_ACCESS_TOKEN` (and `PENPOT_BASE_URL` for a
+  self-hosted Penpot). When a prompt holds such a link, the server (never the page) reads it, read-only, and puts a few short fields in front of the
+  prompt for the program. The server's side of this is strict: a link is parsed and matched against **fixed hosts** (your Jira site only, `api.figma.com`,
+  `design.penpot.app` or exactly the host in `PENPOT_BASE_URL`), and the API address is built by the server, never taken from the link; HTTPS only
+  (a self-hosted Penpot may be `http`, which sends its token in clear: your choice); the address a host name resolves to is checked and the connection
+  is made to that checked address, so a private, loopback, link-local, carrier-grade, documentation or translation address is refused (except for the
+  Penpot host you named); no redirect is followed, a whole request may take 8 seconds and 256 KiB, at most 8 requests run at once and the same question
+  is asked once; each token goes only to its own provider and is never in a result, a log, the page, `/state` or the program's environment.
+  A Jira link to any other Atlassian site is **not** read, because an API token works for every site of the account and would otherwise go to
+  whoever registered one. `POST /integrations/resolve` and `urls` in `POST /prompts` need the login, the header and the usual origin checks; the
+  server asks again for the links of a prompt itself, so the page cannot attach context it made up. Answers are kept 5 minutes (failures 30 seconds) in
+  memory, limited to 30 resolve requests a minute and 10 links each; nothing of it is saved to disk or shown in the Tasks tab.
+  **Residual risk: prompt injection.** The title of a Jira issue or a Figma file can be written by someone else, and it goes to a program that may edit
+  files. The text is cut short (200 characters), invisible and control characters are replaced, each item is one escaped JSON line without square
+  brackets, the block ends with an end line, and the prompt you typed follows under its own label ("Perintah pengguna:"). That lowers the risk and
+  cannot remove it. Use `plan` mode (the default) when you attach links you do not control, and treat a link like any other text you paste into a prompt.
 - **The task list on disk.** So that a restart does not make the Tasks tab forget, the server keeps the task list (ids, desk, folder id,
   runner, status, times, exit code, a short error and **the prompt text**, but never the output) in `agent-office-tasks.json` in the data
   folder (`AGENT_OFFICE_DATA_DIR`, by default the temp folder of your account), created readable by you only where the system knows modes.
@@ -131,5 +148,6 @@ than show activity, so it is **off by default** and strict when on.
   `AGENT_OFFICE_RUNNER_ENV`, `AGENT_OFFICE_TOKEN_FILE`: see above. The server must be restarted to pick them up.
 - `AGENT_OFFICE_ROOTS` (parent folder of the workspaces), `AGENT_OFFICE_SETTINGS_FILE` (where the page saves its choice) and `AGENT_OFFICE_HOME` (which
   folder counts as the home folder in the `too_broad` check; for tests and unusual layouts): see **Which folders**.
+- `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_SITE`, `FIGMA_ACCESS_TOKEN`, `PENPOT_ACCESS_TOKEN`, `PENPOT_BASE_URL`: links as context, see **Context from links**.
 - `AGENT_OFFICE_PORT` changes the port. `AGENT_OFFICE_DATA_DIR` moves the log and the stop marker.
 - `GET /health` reports liveness without exposing event content.

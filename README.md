@@ -97,6 +97,8 @@ Instead of a fixed list you can leave `AGENT_OFFICE_WORKSPACES` out: then every 
 the parent folder in **Pengaturan** (the gear in the header, or "Ubah folder induk…" in the Folder menu), or set `AGENT_OFFICE_ROOTS`; until
 you do there is no folder to run in. This checkout itself is never offered. New project folders show up without a restart.
 
+Links to Jira, Figma and Penpot in a prompt can be read by the server as read-only context (set the tokens, see [SECURITY.md](SECURITY.md)); they show as chips under the input and in the Konteks tab.
+
 The task list is kept across restarts (tasks that were open come back as "Terputus"; nothing is run again).
 
 The dock then lists those folders and runners, tasks come from the server, and a card can show the program's output and cancel it.

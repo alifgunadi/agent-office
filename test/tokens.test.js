@@ -112,7 +112,7 @@ describe('page structure', () => {
 
   it('the side panel is a proper tab set: each tab controls an existing panel', () => {
     for (const m of html.matchAll(/role="tab"[^>]*aria-controls="([^"]+)"/g)) assert.ok(ids.has(m[1]), m[1]);
-    assert.equal([...html.matchAll(/role="tab"\s/g)].length, 2);
-    assert.equal([...html.matchAll(/role="tabpanel"/g)].length, 2);
+    assert.equal([...html.matchAll(/role="tab"\s/g)].length, 3);
+    assert.equal([...html.matchAll(/role="tabpanel"/g)].length, 3);
   });
 });
